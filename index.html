@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Monopoly Online</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ui.css">
+    <link rel="stylesheet" href="css/board.css">
+    <style>
+        #error-log {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            display: none;
+            z-index: 9999;
+            text-align: left;
+            font-family: monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="error-log"></div>
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            const div = document.getElementById('error-log');
+            div.style.display = 'block';
+            div.innerHTML += `<div>Error: ${msg} <br> at ${url}:${line}:${col}</div>`;
+            return false;
+        };
+    </script>
+    <div id="app">
+        <!-- 登入/大廳畫面 -->
+        <div id="lobby-screen" class="screen active">
+            <h1 class="neon-title">NEON MONOPOLY</h1>
+
+            <div class="lobby-controls">
+                <div class="input-group">
+                    <label>您的暱稱</label>
+                    <input type="text" id="player-name" placeholder="輸入名字..." value="Player 1">
+                </div>
+
+                <div class="action-buttons">
+                    <button id="btn-create-room" class="btn primary">建立房間</button>
+                    <div class="divider">OR</div>
+                    <div class="join-group">
+                        <input type="text" id="room-code-input" placeholder="房間代碼">
+                        <button id="btn-join-room" class="btn secondary">加入房間</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="lobby-status" class="status-msg">準備連線...</div>
+            <button id="btn-debug-board" style="margin-top: 20px; background: #333; color: #888; font-size: 0.8rem;"
+                class="btn">🔧 測試: 直接看棋盤</button>
+        </div>
+
+        <!-- 等待室畫面 -->
+        <div id="waiting-screen" class="screen hidden">
+            <h2>房間代碼: <span id="display-room-code" class="highlight-code">Loading...</span></h2>
+            <div class="player-list-container">
+                <h3>已加入玩家:</h3>
+                <ul id="player-list">
+                    <!-- JS will populate this -->
+                </ul>
+            </div>
+            <div id="host-controls" class="hidden">
+                <button id="btn-start-game" class="btn success">開始遊戲</button>
+            </div>
+            <div id="waiting-msg">等待房主開始遊戲...</div>
+        </div>
+
+        <!-- 遊戲主畫面 (暫時留空) -->
+        <div id="game-screen" class="screen hidden">
+            <h1 style="font-size:1.5rem; margin:10px;">Neon Monopoly <span style="font-size:0.8rem; color:gray;">(Room:
+                    <span id="game-room-id"></span>)</span></h1>
+
+            <!-- DEBUG INFO -->
+            <div id="debug-overlay" style="
+                position: absolute; 
+                top: 10px; 
+                right: 10px; 
+                background: rgba(0,0,0,0.8); 
+                padding: 10px; 
+                border: 1px solid red; 
+                font-family: monospace; 
+                font-size: 12px;
+                text-align: right;
+                z-index: 1000;
+            ">
+                Debug Info...
+            </div>
+
+            <div id="game-board-container"></div>
+
+            <!-- ACTION MODAL (Buy/Pay) -->
+            <div id="action-modal" class="modal-overlay hidden">
+                <div class="modal-content neon-box">
+                    <h2 id="modal-title">Property Name</h2>
+                    <div id="modal-body">
+                        <p>Price: <span id="modal-price" class="highlight-text">$0</span></p>
+                        <div id="modal-description">Description...</div>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-modal-action" class="btn primary">BUY</button>
+                        <button id="btn-modal-cancel" class="btn secondary">PASS</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Type module allows us to use import/export -->
+        <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
