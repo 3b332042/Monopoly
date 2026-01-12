@@ -3,3 +3,48 @@ Run at: 2026/01/12 ¶g¤@ 23:56:25.32
 Initialization Git repository... 
 Initialized empty Git repository in C:/Users/a9804/Desktop/VSCODE/Monopoly/.git/
 Add all files... 
+warning: in the working copy of 'css/board.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'css/style.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'css/ui.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'js/board.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'js/firebase.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'js/game.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'js/main.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'js/player.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'startup_log.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'ä¸€éµä¸Šå‚³GitHub.bat', LF will be replaced by CRLF the next time Git touches it
+Commit changes... 
+[master (root-commit) f4bfc36] Startup Auto-Upload: 2026/01/12 é€±ä¸€ 23:56:25.56
+ 12 files changed, 1590 insertions(+)
+ create mode 100644 css/board.css
+ create mode 100644 css/style.css
+ create mode 100644 css/ui.css
+ create mode 100644 index.html
+ create mode 100644 js/board.js
+ create mode 100644 js/firebase.js
+ create mode 100644 js/game.js
+ create mode 100644 js/main.js
+ create mode 100644 js/player.js
+ create mode 100644 startup_log.txt
+ create mode 100644 startup_upload.bat
+ create mode 100644 "\344\270\200\351\215\265\344\270\212\345\202\263GitHub.bat"
+Rename branch to main... 
+Setting remote repository... 
+error: No such remote: 'origin'
+Pushing to GitHub... 
+To https://github.com/3b332042/Monopoly.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/3b332042/Monopoly.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+Done! 
+---------------------------------------- 
+---------------------------------------- 
+Run at: 2026/01/12 ¶g¤@ 23:57:18.35 
+Initialization Git repository... 
+Reinitialized existing Git repository in C:/Users/a9804/Desktop/VSCODE/Monopoly/.git/
+Add all files... 
