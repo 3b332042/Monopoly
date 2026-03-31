@@ -1,8 +1,8 @@
-import { Player } from './player.js?v=16';
-import { TILE_DATA } from './board.js?v=16';
-import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=16';
-import { NetworkManager } from './network.js?v=16';
-import { UIManager } from './ui.js?v=16';
+import { Player } from './player.js?v=17';
+import { TILE_DATA } from './board.js?v=17';
+import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=17';
+import { NetworkManager } from './network.js?v=17';
+import { UIManager } from './ui.js?v=17';
 
 export class Game {
     constructor(roomId, myPlayerId, board) {
@@ -34,6 +34,27 @@ export class Game {
             }
         );
         this.network.listenToAuction((data) => this.handleAuctionUpdate(data));
+        this.network.listenToLog((entry) => this.showToast(entry.emoji, entry.message, entry.color));
+    }
+
+    showToast(emoji, message, color = '#ffffff') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'game-toast';
+        toast.style.borderLeftColor = color;
+        toast.style.boxShadow = `0 0 12px ${color}44`;
+        toast.innerHTML = `<span class="toast-emoji">${emoji}</span><span class="toast-msg" style="color:${color}">${message}</span>`;
+
+        container.appendChild(toast);
+        // Trigger animation
+        requestAnimationFrame(() => toast.classList.add('toast-visible'));
+
+        setTimeout(() => {
+            toast.classList.remove('toast-visible');
+            toast.addEventListener('transitionend', () => toast.remove());
+        }, 4000);
     }
 
     syncPlayers(data) {
@@ -114,6 +135,7 @@ export class Game {
                 me.isJailed = false;
                 me.jailTurns = 0;
                 this.ui.setGameMessage("支付保釋金 $1500 出獄！", "#00ff00");
+                await this.network.pushLog('🔓', `${me.name} 支付 $1500 保釋金出獄！`, '#00ff88');
                 await this.network.pushUpdate({
                     [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
                     [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
@@ -133,6 +155,7 @@ export class Game {
                     me.isJailed = false;
                     me.jailTurns = 0;
                     this.ui.setGameMessage(`擲出雙子 ${d1}! 成功越獄！`, "#00ff00");
+                    await this.network.pushLog('🎲', `${me.name} 擲出雙子 ${d1}！成功越獄！`, '#00ff88');
                     await this.network.pushUpdate({
                         [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
                         [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: 0
@@ -144,6 +167,7 @@ export class Game {
                         me.isJailed = false;
                         me.jailTurns = 0;
                         this.ui.setGameMessage(`坐牢滿 3 回合，強制支付 $1500 出獄。`, "orange");
+                        await this.network.pushLog('⛓️', `${me.name} 坐牢滿 3 回合，強制支付 $1500 出獄。`, '#ff6600');
                         await this.network.pushUpdate({
                             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
                             [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
@@ -190,7 +214,9 @@ export class Game {
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = me.position;
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
         updates[`rooms/${this.roomId}/gameState/lastDice`] = [d1, d2];
+        
         await this.network.pushUpdate(updates);
+        await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！${passedGo ? '（經過起點 +$2000）' : ''}`, '#00ff88');
 
         // Wait for animation
         const animationDelay = (steps * 300) + 500;
@@ -261,6 +287,7 @@ export class Game {
                                 [`rooms/${this.roomId}/gameState/buildings/${tile.id}`]: nextLevel
                             };
                             await this.network.pushUpdate(updates);
+                            await this.network.pushLog('🌟', `${me.name} 將 ${tile.name} 升級至 Lv.${nextLevel}！`, '#ffaa00');
                         }
                     } else {
                         this.ui.setGameMessage(`(你的 ${tile.name} 已達最高等級)`, "#ffaa00");
@@ -328,6 +355,7 @@ export class Game {
                 [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position
             };
             await this.network.pushUpdate(updates);
+            await this.network.pushLog('🚉', `${me.name} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！支出 $${tile.price}${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ffff');
             
             // Wait for visual movement update
             await new Promise(r => setTimeout(r, 1000));
@@ -353,6 +381,7 @@ export class Game {
         this.ui.setGameMessage(`你買下了 ${tile.name}!`, "#00ff00");
         this.updateUI(); // Optimistic update
         await this.network.pushUpdate(updates);
+        await this.network.pushLog('🏠', `${p.name} 買下了 ${tile.name}！`, '#00ff88');
     }
 
     async triggerCard(type) {
@@ -363,13 +392,13 @@ export class Game {
 
             const card = deck[Math.floor(Math.random() * deck.length)];
             await this.ui.drawCard(card, isChance);
-            await this.applyCardEffect(card);
+            await this.applyCardEffect(card, type);
         } catch (e) {
             console.error("Error drawing card:", e);
         }
     }
 
-    async applyCardEffect(card) {
+    async applyCardEffect(card, type) {
         const me = this.players[this.myPlayerId];
         if (!me) return;
 
@@ -415,6 +444,11 @@ export class Game {
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = Number(me.balance);
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = Number(me.position);
         await this.network.pushUpdate(updates);
+        
+        // GLOBAL LOG for Card Effect
+        const cardEmoji = type === 'chance' ? '❓' : '🎁';
+        const cardColor = type === 'chance' ? '#ef5350' : '#ab47bc';
+        await this.network.pushLog(cardEmoji, `${me.name} 抽到了${type === 'chance' ? '機會' : '命運'}卡：${card.text.replace(/<br>/g, ' ')}`, cardColor);
 
         if (['move', 'moveto'].includes(card.type)) {
             await new Promise(r => setTimeout(r, 1000));
@@ -472,6 +506,7 @@ export class Game {
         }
 
         await this.network.pushUpdate(updates);
+        await this.network.pushLog('💸', `${me.name} 向 ${this.players[ownerId]?.name || '?'} 支付過路費 $${rent}（${tile.name} Lv.${level}）`, '#ff4444');
         await new Promise(r => setTimeout(r, 2000));
 
         // Check bankruptcy AFTER we've pushed the payment
@@ -506,6 +541,7 @@ export class Game {
         if (owner) updates[`rooms/${this.roomId}/players/${ownerId}/balance`] = owner.balance;
 
         await this.network.pushUpdate(updates);
+        await this.network.pushLog('⚡', `${me.name} 向 ${this.players[ownerId]?.name || '?'} 支付公共事業費 $${fee}（骰子 ${diceTotal} × $100）`, '#ff6600');
         await new Promise(r => setTimeout(r, 2000));
 
         await this.checkBankruptcy(this.myPlayerId, ownerId);
@@ -536,6 +572,7 @@ export class Game {
             }
 
             await this.network.pushUpdate(updates);
+            await this.network.pushLog('🏢', `${me.name} 強制收購 ${tile.name} 自 ${ownerName}！支付 $${acquisitionPrice}`, '#ff9900');
 
             this.ui.setGameMessage(`🏢 成功收購 ${tile.name}！ (支付 $${acquisitionPrice} 給 ${ownerName})`, '#ff9900');
             this.updateUI();
@@ -552,6 +589,7 @@ export class Game {
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
         
         await this.network.pushUpdate(updates);
+        await this.network.pushLog('🏦', `${me.name} 繳納稅金 $${tile.price}（${tile.name}）`, '#ffcc00');
         await new Promise(r => setTimeout(r, 1500));
 
         // Check bankruptcy for taxes (creditor = bank / null)
@@ -587,6 +625,7 @@ export class Game {
             [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position,
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
         });
+        await this.network.pushLog('🛠️', `管理員將 ${me.name} 傳送至 ${targetId} 號格 ${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ccff');
         await new Promise(r => setTimeout(r, 1000));
         await this.checkTileInteraction(me.position);
     }
@@ -610,6 +649,7 @@ export class Game {
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
         });
         this.ui.setGameMessage(`(Debug) 資金變更 $${amount}`, "cyan");
+        await this.network.pushLog('🛠️', `管理員調整 ${me.name} 的資金：${amount > 0 ? '+' : ''}${amount}`, '#00ff00');
     }
 
     async goToJail() {
@@ -621,7 +661,7 @@ export class Game {
         
         this.ui.setGameMessage("🚨 遣送入獄！", "red");
         this.updateUI();
-
+        await this.network.pushLog('🚨', `${me.name} 被送進監獄！`, '#ff0044');
         await this.network.pushUpdate({
             [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: 10,
             [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: true,
@@ -634,6 +674,9 @@ export class Game {
     async checkBankruptcy(playerId, creditorId) {
         const player = this.players[playerId];
         if (!player || player.balance >= 0) return;
+        const playerName = player?.name || playerId;
+        const creditorName = creditorId ? (this.players[creditorId]?.name || creditorId) : '銀行';
+        await this.network.pushLog('💀', `${playerName} 宣告破產！資產全數移交給 ${creditorName}。`, '#ff0000');
         await this.declareBankruptcy(playerId, creditorId);
     }
 
@@ -774,6 +817,10 @@ export class Game {
         // Reset auction-closed guard for next auction
         this._auctionClosed = false;
         this._latestAuctionData = null;
+
+        const tileName = TILE_DATA.find(t => t.id === tileId)?.name || '未知地產';
+        await this.network.pushLog('🔨', `${me.name} 發起了 ${tileName} 的公開競拍！起拍價 $${startPrice}`, '#aa00ff');
+
         this.ui.setGameMessage(`🔨 發起競拍！押金 $700 已扣除。起拍價 $${startPrice}`, '#aa00ff');
         this.updateUI();
     }
@@ -893,12 +940,13 @@ export class Game {
 
             const winnerName = winner?.name || '?';
             const sellerName = seller?.name || '?';
+            await this.network.pushLog('🎉', `競拍成交！${winnerName} 以 $${amount} 得標 ${tile?.name}！${sellerName} 獲得 $${amount}。`, '#aa00ff');
             this.showAuctionResult(`🎉 ${winnerName} 以 $${amount} 得標！\n${sellerName} 獲得 $${amount}。`, true);
         } else {
             // No valid bids — deposit already deducted, property stays
             updates[`rooms/${this.roomId}/auction`] = null;
             await this.network.pushUpdate(updates);
-
+            await this.network.pushLog('💔', `流拍！無人出價 ${tile?.name}，押金 $700 不退回。`, '#ff4444');
             this.showAuctionResult(`流拍！無人出價，押金 $700 不退回。\n${tile?.name} 保留在賣方手中。`, false);
         }
 

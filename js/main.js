@@ -1,4 +1,4 @@
-import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=16';
+import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=17';
 
 // DOM Elements
 const lobbyScreen = document.getElementById('lobby-screen');
@@ -22,6 +22,21 @@ let currentRoomId = null;
 let isHost = false;
 
 // Helpers
+const PLAYER_COLORS = [
+    '#00f0ff', // Cyan
+    '#ff0099', // Magenta
+    '#00ff88', // Green
+    '#ffcc00', // Yellow
+    '#ff6600', // Orange
+    '#aa00ff', // Purple
+];
+
+function getNextColor(existingPlayers) {
+    const used = existingPlayers ? Object.values(existingPlayers).map(p => p.color) : [];
+    const available = PLAYER_COLORS.find(c => !used.includes(c));
+    return available || PLAYER_COLORS[used.length % PLAYER_COLORS.length];
+}
+
 function generateRoomCode() {
     return Math.floor(1000 + Math.random() * 9000).toString(); // Simple 4 digit code
 }
@@ -78,7 +93,7 @@ async function createRoom() {
                 name: name,
                 balance: 15000,
                 position: 0,
-                color: '#ff0000', // Default Red
+                color: PLAYER_COLORS[0], // Host always gets first color
                 isReady: true
             }
         }
@@ -127,11 +142,12 @@ async function joinRoom() {
 
         // Add player to room
         const playerRef = ref(db, `rooms/${roomId}/players/${currentPlayerId}`);
+        const assignedColor = getNextColor(roomData.players);
         await set(playerRef, {
             name: name,
             balance: 15000,
             position: 0,
-            color: '#00ff00', // Default Green (improve later)
+            color: assignedColor,
             isReady: true
         });
 
@@ -177,7 +193,27 @@ function updatePlayerList(players) {
     playerList.innerHTML = '';
     Object.values(players).forEach(p => {
         const li = document.createElement('li');
-        li.textContent = `${p.name} ($${p.balance})`;
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '8px';
+        li.style.marginBottom = '6px';
+
+        const dot = document.createElement('span');
+        dot.style.cssText = `
+            display:inline-block;
+            width:14px; height:14px;
+            border-radius:50%;
+            background:${p.color || '#fff'};
+            box-shadow: 0 0 8px ${p.color || '#fff'};
+            flex-shrink:0;
+        `;
+
+        const text = document.createElement('span');
+        text.textContent = `${p.name}`;
+        text.style.color = p.color || '#fff';
+
+        li.appendChild(dot);
+        li.appendChild(text);
         playerList.appendChild(li);
     });
 }
@@ -189,8 +225,8 @@ function startGameRequest() {
     });
 }
 
-import { Board } from './board.js?v=16';
-import { Game } from './game.js?v=16';
+import { Board } from './board.js?v=17';
+import { Game } from './game.js?v=17';
 
 let gameBoard = null;
 let gameInstance = null;

@@ -58,7 +58,7 @@
             </div>
 
             <div id="lobby-status" class="status-msg">準備連線...</div>
-            <button id="btn-debug-board" style="margin-top: 20px; background: #333; color: #888; font-size: 0.8rem;"
+            <button id="btn-debug-board" style="display: none; margin-top: 20px; background: #333; color: #888; font-size: 0.8rem;"
                 class="btn">🔧 測試: 直接看棋盤</button>
         </div>
 
@@ -103,6 +103,9 @@
             </div>
 
             <div id="game-board-container"></div>
+
+            <!-- TOAST NOTIFICATION CONTAINER -->
+            <div id="toast-container"></div>
 
             <!-- ACTION MODAL (Buy/Pay) -->
             <div id="action-modal" class="modal-overlay hidden">
@@ -266,7 +269,7 @@
             </div>
 
             <!-- ADMIN CONSOLE (Bottom Left) -->
-            <div id="admin-console" style="position: absolute; bottom: 10px; left: 10px; background: rgba(30,10,50,0.9); color: #0cf; padding: 15px; border: 2px solid #0cf; border-radius: 8px; z-index: 1000; font-size: 14px; box-shadow: 0 0 10px #0cf;">
+            <div id="admin-console" style="display: none; position: absolute; bottom: 10px; left: 10px; background: rgba(30,10,50,0.9); color: #0cf; padding: 15px; border: 2px solid #0cf; border-radius: 8px; z-index: 1000; font-size: 14px; box-shadow: 0 0 10px #0cf;">
                 <h3 style="margin-top:0; margin-bottom:10px; font-size:16px; color:#fff; text-shadow: 0 0 5px #0cf;">🛠️ 開發者主控台</h3>
                 
                 <div style="margin-bottom: 8px;">
@@ -293,7 +296,7 @@
         </div>
 
         <!-- Type module allows us to use import/export -->
-        <script type="module" src="js/main.js?v=16"></script>
+        <script type="module" src="js/main.js?v=17"></script>
 </body>
 
 </html>

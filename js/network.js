@@ -1,4 +1,4 @@
-import { db, ref, update, onValue, set, get } from './firebase.js?v=16';
+import { db, ref, update, onValue, set, get, push, onChildAdded } from './firebase.js?v=17';
 
 export class NetworkManager {
     constructor(roomId) {
@@ -11,6 +11,7 @@ export class NetworkManager {
         this.playersRef = ref(db, `rooms/${this.roomId}/players`);
         this.gameRef = ref(db, `rooms/${this.roomId}/gameState`);
         this.auctionRef = ref(db, `rooms/${this.roomId}/auction`);
+        this.logRef = ref(db, `rooms/${this.roomId}/log`);
     }
 
     forceOffline() { this.isOfflineMode = true; }
@@ -63,6 +64,29 @@ export class NetworkManager {
     async clearAuction() {
         if (this.isOfflineMode) return;
         await set(this.auctionRef, null);
+    }
+
+    async pushLog(emoji, message, color) {
+        if (this.isOfflineMode) return;
+        await push(this.logRef, {
+            emoji: emoji || '📢',
+            message,
+            color: color || '#ffffff',
+            ts: Date.now()
+        });
+    }
+
+    listenToLog(callback) {
+        if (this.roomId === 'debug_room') return;
+        // Adjust start time back slightly to catch logs that might have been sent during listener setup
+        const startTime = Date.now() - 2000; 
+        onChildAdded(this.logRef, (snapshot) => {
+            if (this.isOfflineMode) return;
+            const entry = snapshot.val();
+            // Skip entries that existed before this session started
+            if (!entry || entry.ts < startTime) return;
+            callback(entry);
+        });
     }
 
     async pushUpdate(updates) {

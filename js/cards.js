@@ -11,11 +11,16 @@ export const CHANCE_CARDS = [
 
 export const CHEST_CARDS = [
     { id: 'cc_1', text: "銀行分紅，獲得 $500", type: 'money', value: 500 },
-    { id: 'cc_2', text: "看醫生花了 $500", type: 'money', value: -500 },
+    { id: 'cc_2', text: "身體不適看急診，支付 $1500", type: 'money', value: -1500 },
     { id: 'cc_3', text: "遺產繼承，獲得 $1000", type: 'money', value: 1000 },
-    { id: 'cc_4', text: "被強制徵收土地稅，房屋每棟 $400", type: 'tax_building', value: 400 }, // Logic for this needs implementation, simplify for now
-    { id: 'cc_5', text: "出獄許可證", type: 'jail_free' }, // Logic needs implementation
-    { id: 'cc_6', text: "直接去坐牢", type: 'jail' },
+    { id: 'cc_4', text: "小確幸！撿到 $200", type: 'money', value: 200 },
+    { id: 'cc_6', text: "直接送去坐牢", type: 'jail' },
     { id: 'cc_7', text: "支付保險費 $1500", type: 'money', value: -1500 },
-    { id: 'cc_8', text: "撿到錢 $100", type: 'money', value: 100 }
+    { id: 'cc_8', text: "中發票了！獲得 $1000", type: 'money', value: 1000 },
+    { id: 'cc_10', text: "電腦壞掉啦，維修費 $800", type: 'money', value: -800 },
+    { id: 'cc_11', text: "去台北車站 (ID: 5) 逛逛", type: 'moveto', value: 5 },
+    { id: 'cc_12', text: "遇到大塞車，後退 3 格", type: 'move', value: -3 },
+    { id: 'cc_13', text: "錢包遺失！損失 $2000", type: 'money', value: -2000 },
+    { id: 'cc_14', text: "繳納奢侈稅 $3000", type: 'money', value: -3000 },
+    { id: 'cc_15', text: "投資失敗，支付 $2500", type: 'money', value: -2500 }
 ];
