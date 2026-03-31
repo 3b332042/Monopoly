@@ -16,7 +16,7 @@ git remote remove origin
 git remote add origin https://3b332042@github.com/3b332042/Monopoly.git
 
 echo Pushing to GitHub...
-git push -u origin main
+git push -u origin main --force
 
 echo Done!
 pause
