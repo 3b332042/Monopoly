@@ -180,3 +180,66 @@ input[type="text"]:focus {
     display: block;
     margin: 10px 0;
 }
+
+/* Card Animation */
+.card-display {
+    width: 300px;
+    height: 400px;
+    perspective: 1000px;
+}
+
+.card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.8s;
+    transform-style: preserve-3d;
+}
+
+.card-display.flipped .card-inner {
+    transform: rotateY(180deg);
+}
+
+.card-front,
+.card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    border: 4px solid #fff;
+}
+
+.card-front {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+    color: #333;
+}
+
+.card-front.chest-style {
+    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+}
+
+.card-back {
+    background: #fff;
+    color: #000;
+    transform: rotateY(180deg);
+    padding: 20px;
+}
+
+.card-logo {
+    font-size: 8rem;
+    font-weight: bold;
+    opacity: 0.5;
+}
+
+#card-desc {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+}

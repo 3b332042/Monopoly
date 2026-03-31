@@ -1,0 +1,822 @@
+diff --git a/css/ui.css b/css/ui.css
+index 29486d3..7dd3516 100644
+--- a/css/ui.css
++++ b/css/ui.css
+@@ -179,4 +179,67 @@ input[type="text"]:focus {
+     font-weight: bold;
+     display: block;
+     margin: 10px 0;
++}
++
++/* Card Animation */
++.card-display {
++    width: 300px;
++    height: 400px;
++    perspective: 1000px;
++}
++
++.card-inner {
++    position: relative;
++    width: 100%;
++    height: 100%;
++    text-align: center;
++    transition: transform 0.8s;
++    transform-style: preserve-3d;
++}
++
++.card-display.flipped .card-inner {
++    transform: rotateY(180deg);
++}
++
++.card-front,
++.card-back {
++    position: absolute;
++    width: 100%;
++    height: 100%;
++    -webkit-backface-visibility: hidden;
++    backface-visibility: hidden;
++    border-radius: 15px;
++    display: flex;
++    flex-direction: column;
++    justify-content: center;
++    align-items: center;
++    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
++    border: 4px solid #fff;
++}
++
++.card-front {
++    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
++    color: #333;
++}
++
++.card-front.chest-style {
++    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
++}
++
++.card-back {
++    background: #fff;
++    color: #000;
++    transform: rotateY(180deg);
++    padding: 20px;
++}
++
++.card-logo {
++    font-size: 8rem;
++    font-weight: bold;
++    opacity: 0.5;
++}
++
++#card-desc {
++    font-size: 1.5rem;
++    margin-bottom: 2rem;
+ }
+\ No newline at end of file
+diff --git a/index.html b/index.html
+index 2de117e..d1ddc6e 100644
+--- a/index.html
++++ b/index.html
+@@ -8,6 +8,7 @@
+     <link rel="stylesheet" href="css/style.css">
+     <link rel="stylesheet" href="css/ui.css">
+     <link rel="stylesheet" href="css/board.css">
++    <link rel="stylesheet" href="css/dice.css">
+     <style>
+         #error-log {
+             position: fixed;
+@@ -81,20 +82,24 @@
+             <h1 style="font-size:1.5rem; margin:10px;">Neon Monopoly <span style="font-size:0.8rem; color:gray;">(Room:
+                     <span id="game-room-id"></span>)</span></h1>
+ 
+-            <!-- DEBUG INFO -->
++            <!-- DEBUG/CASH OVERLAY -->
+             <div id="debug-overlay" style="
+                 position: absolute; 
+-                top: 10px; 
+-                right: 10px; 
+-                background: rgba(0,0,0,0.8); 
+-                padding: 10px; 
+-                border: 1px solid red; 
+-                font-family: monospace; 
+-                font-size: 12px;
++                top: 20px; 
++                right: 30px; 
++                background: rgba(15, 15, 26, 0.85); 
++                backdrop-filter: blur(10px);
++                padding: 20px 25px; 
++                border: 2px solid var(--accent-color); 
++                border-radius: 12px;
++                box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
++                font-family: 'Segoe UI', sans-serif; 
++                font-size: 16px;
+                 text-align: right;
+                 z-index: 1000;
++                min-width: 250px;
+             ">
+-                Debug Info...
++                Loading Data...
+             </div>
+ 
+             <div id="game-board-container"></div>
+@@ -113,10 +118,26 @@
+                     </div>
+                 </div>
+             </div>
++
++            <!-- CARD MODAL (Chance/Chest) -->
++            <div id="card-modal" class="modal-overlay hidden">
++                <div class="card-display">
++                    <div class="card-inner">
++                        <div class="card-front">
++                            <div class="card-logo">?</div>
++                            <h2 id="card-type-title">CHANCE</h2>
++                        </div>
++                        <div class="card-back">
++                            <h3 id="card-desc">Go Back 3 Spaces</h3>
++                            <button id="btn-card-ok" class="btn primary">OK</button>
++                        </div>
++                    </div>
++                </div>
++            </div>
+         </div>
+ 
+         <!-- Type module allows us to use import/export -->
+-        <script type="module" src="js/main.js"></script>
++        <script type="module" src="js/main.js?v=3"></script>
+ </body>
+ 
+ </html>
+\ No newline at end of file
+diff --git a/js/board.js b/js/board.js
+index 089d344..cb42df7 100644
+--- a/js/board.js
++++ b/js/board.js
+@@ -57,8 +57,28 @@ export class Board {
+         center.innerHTML = `
+             <div class="logo">MONOPOLY <br> <span style="font-size:0.5em; color:var(--accent-color)">ONLINE</span></div>
+             <div class="dice-area" id="dice-container">
++                 <div class="dice-wrap">
++                    <div class="dice-container">
++                        <div id="dice-1" class="dice">
++                            <div class="dice-face">1</div>
++                            <div class="dice-face">2</div>
++                            <div class="dice-face">3</div>
++                            <div class="dice-face">4</div>
++                            <div class="dice-face">5</div>
++                            <div class="dice-face">6</div>
++                        </div>
++                        <div id="dice-2" class="dice">
++                            <div class="dice-face">1</div>
++                            <div class="dice-face">2</div>
++                            <div class="dice-face">3</div>
++                            <div class="dice-face">4</div>
++                            <div class="dice-face">5</div>
++                            <div class="dice-face">6</div>
++                        </div>
++                    </div>
++                 </div>
+                  <button id="roll-btn" class="btn primary">擲骰子</button>
+-                 <div id="dice-result"></div>
++                 <div id="dice-result" style="margin-top:10px; font-weight:bold; color:#0f0;"></div>
+             </div>
+             <div id="game-message" class="game-msg">等待回合...</div>
+         `;
+@@ -157,7 +177,7 @@ export class Board {
+                 // Existing Token -> Check for Movement
+                 token.classList.remove('stale-token'); // It's still active
+                 const currentPos = parseInt(token.dataset.currentPos);
+-                
++
+                 // Update basic appearances if changed (color/balance/name)
+                 token.title = `${p.name} ($${p.balance})`;
+                 token.style.backgroundColor = p.color;
+@@ -165,7 +185,7 @@ export class Board {
+                 if (currentPos !== p.position) {
+                     // Check if already animating to this target to avoid double-trigger
+                     if (token.dataset.targetPos == p.position) return;
+-                    
++
+                     this.animateMovement(token, currentPos, p.position);
+                 }
+             }
+@@ -182,7 +202,7 @@ export class Board {
+         token.style.backgroundColor = p.color;
+         token.title = `${p.name} ($${p.balance})`;
+         token.textContent = p.name ? p.name[0].toUpperCase() : '?';
+-        
++
+         // Styles are better handled in CSS, but keeping inline for now as per original
+         Object.assign(token.style, {
+             color: '#000',
+@@ -205,7 +225,7 @@ export class Board {
+ 
+     animateMovement(token, startPos, endPos) {
+         token.dataset.targetPos = endPos; // Lock target
+-        
++
+         // Calculate total steps (Monopoly always moves forward)
+         const totalSteps = (endPos - startPos + 40) % 40;
+         if (totalSteps === 0) return;
+@@ -229,7 +249,7 @@ export class Board {
+ 
+             nextPos = (nextPos + 1) % 40;
+             const nextTile = document.querySelector(`.tile-${nextPos}`);
+-            
++
+             if (nextTile) {
+                 // Play sound effect here if desired
+                 nextTile.appendChild(token);
+@@ -294,4 +314,41 @@ export class Board {
+             }
+         });
+     }
++    rollDiceAnimation(d1, d2) {
++        return new Promise(resolve => {
++            const dice1 = document.getElementById('dice-1');
++            const dice2 = document.getElementById('dice-2');
++
++            // 1. Start Spin Animation
++            dice1.classList.add('rolling');
++            dice2.classList.add('rolling');
++
++            // 2. Determine Transforms
++            const getTransform = (val) => {
++                switch (val) {
++                    case 1: return 'rotateX(0deg) rotateY(0deg)';
++                    case 2: return 'rotateX(0deg) rotateY(-90deg)';
++                    case 3: return 'rotateX(0deg) rotateY(180deg)';
++                    case 4: return 'rotateX(0deg) rotateY(90deg)';
++                    case 5: return 'rotateX(-90deg) rotateY(0deg)';
++                    case 6: return 'rotateX(90deg) rotateY(0deg)';
++                        return 'rotateX(0deg) rotateY(0deg)';
++                }
++            };
++
++            const t1 = getTransform(d1);
++            const t2 = getTransform(d2);
++
++            // 3. Stop after delay
++            setTimeout(() => {
++                dice1.classList.remove('rolling');
++                dice2.classList.remove('rolling');
++
++                dice1.style.transform = t1;
++                dice2.style.transform = t2;
++
++                resolve();
++            }, 1000); // 1 second rolling
++        });
++    }
+ }
+diff --git a/js/game.js b/js/game.js
+index bb83adc..8b730a6 100644
+--- a/js/game.js
++++ b/js/game.js
+@@ -1,6 +1,7 @@
+ import { db, ref, update, onValue, set } from './firebase.js';
+ import { Player } from './player.js';
+ import { TILE_DATA } from './board.js';
++import { CHANCE_CARDS, CHEST_CARDS } from './cards.js';
+ 
+ export class Game {
+     constructor(roomId, myPlayerId, board) {
+@@ -12,16 +13,25 @@ export class Game {
+             turnIndex: 0,
+             playerOrder: [],
+             lastDice: [1, 1],
++            lastDice: [1, 1],
+             properties: {} // { tileId: playerId }
+         };
++        this.isProcessingTurn = false;
++        this.isOfflineMode = false; // Flag to prevent Firebase rollbacks if disconnected
+ 
+         this.initListeners();
+     }
+ 
+     initListeners() {
++        if (this.roomId === 'debug_room') {
++            console.warn("Debug Room: Completely disabling Firebase listeners to prevent rollbacks.");
++            return;
++        }
++
+         // Listen to Players Data
+         const playersRef = ref(db, `rooms/${this.roomId}/players`);
+         onValue(playersRef, (snapshot) => {
++            if (this.isOfflineMode) return;
+             const data = snapshot.val();
+             if (data) this.syncPlayers(data);
+         });
+@@ -29,6 +39,7 @@ export class Game {
+         // Listen to Game State (Turns, etc)
+         const gameRef = ref(db, `rooms/${this.roomId}/gameState`);
+         onValue(gameRef, (snapshot) => {
++            if (this.isOfflineMode) return;
+             const data = snapshot.val();
+             // console.log("Game State Update:", data); 
+             if (data) {
+@@ -57,6 +68,9 @@ export class Game {
+         if (this.gameState && this.gameState.properties) {
+             this.board.updatePropertyOwnership(this.gameState.properties, Object.values(this.players));
+         }
++
++        // Trigger UI update using new player data (Balances, Position Text, etc)
++        this.updateUI();
+     }
+ 
+     async startGame(playerIds) {
+@@ -97,7 +111,7 @@ export class Game {
+         const rollBtn = document.getElementById('roll-btn');
+         const diceRes = document.getElementById('dice-result');
+ 
+-        if (isMyTurn) {
++        if (isMyTurn && !this.isProcessingTurn) {
+             const [d1, d2] = this.gameState.lastDice || [0, 0];
+             const isDoubles = (d1 === d2) && (d1 > 0);
+ 
+@@ -145,39 +159,51 @@ export class Game {
+     }
+ 
+     updateDebugOverlay(currentTurnPlayerId, isMyTurn) {
+-        const debugEl = document.getElementById('debug-overlay');
+-        if (!debugEl) return;
++        const overlay = document.getElementById('debug-overlay');
++        if (!overlay) return;
++
++        let playersHtml = "";
++        const playerOrder = this.gameState.playerOrder || [];
+ 
+-        let playersHtml = '';
+-        this.gameState.playerOrder.forEach((pid, idx) => {
++        playerOrder.forEach((pid, idx) => {
+             const p = this.players[pid];
+-            const isTurn = idx === this.gameState.turnIndex;
+-            const bgStyle = isTurn ? 'background:rgba(0,255,0,0.2);' : '';
++            const isTurn = pid === currentTurnPlayerId;
+             const isMe = pid === this.myPlayerId;
+-
++            
++            // Graceful fallback if p is undefined
++            const name = p?.name || `Player ${idx + 1}`;
++            const balance = p?.balance ?? 0;
++            const color = p?.color || '#00f0ff';
++            
+             playersHtml += `
+-                <div style="${bgStyle} border-bottom:1px solid #444; padding:4px; font-size:11px;">
+-                    <div style="display:flex; justify-content:space-between;">
+-                        <span style="${isTurn ? 'color:#0f0; font-weight:bold;' : 'color:#aaa'}">
+-                            ${isTurn ? '▶' : ''} ${p?.name || '???'} 
+-                            ${isMe ? '(YOU)' : ''}
+-                        </span>
+-                        <span>$${p?.balance}</span>
+-                    </div>
+-                    <div style="font-size:10px; color:#aaa; text-align:right;">Pos: ${p?.position}</div>
++            <div style="
++                margin-top: 15px;
++                padding: 10px;
++                background: rgba(0,0,0,0.5);
++                border-left: 4px solid ${color};
++                border-radius: 6px;
++                transition: transform 0.2s;
++                ${isTurn ? `transform: scale(1.05); box-shadow: 0 0 10px ${color};` : ''}
++            ">
++                <div style="font-size: 14px; color: #ccc;">
++                    ${isTurn ? '▶' : ''} ${name} ${isMe ? '(You)' : ''}
++                </div>
++                <div style="font-size: 28px; font-weight: bold; color: ${color}; text-shadow: 0 0 10px ${color};">
++                    $${balance}
+                 </div>
+-            `;
++                <div style="font-size: 11px; color: #888;">Position: ${p?.position ?? 0}</div>
++            </div>`;
+         });
+ 
+-        debugEl.innerHTML = `
+-            <div style="border-bottom:1px solid red; padding-bottom:5px; margin-bottom:5px;">
+-                <strong>Room: ${this.roomId}</strong> <br>
+-                Status: ${isMyTurn ? '<span style="color:#0f0">YOUR TURN</span>' : 'WAITING'}
++        overlay.innerHTML = `
++            <div style="font-size: 14px; border-bottom: 2px solid #444; padding-bottom: 8px; margin-bottom: 10px;">
++                <span style="color: #aaa;">Status:</span> 
++                <span style="color:${isMyTurn ? '#0f0' : '#888'}; font-weight: bold;">
++                    ${isMyTurn ? 'YOUR TURN' : 'WAITING...'}
++                </span>
+             </div>
+             ${playersHtml}
+         `;
+-        debugEl.style.color = 'white';
+-        debugEl.style.border = '1px solid var(--accent-color)';
+     }
+ 
+     async rollDice() {
+@@ -190,12 +216,17 @@ export class Game {
+         }
+ 
+         const rollBtn = document.getElementById('roll-btn');
++        if (this.isProcessingTurn) return; // Double check
++        this.isProcessingTurn = true;
+         rollBtn.disabled = true;
+ 
+         const d1 = Math.floor(Math.random() * 6) + 1;
+         const d2 = Math.floor(Math.random() * 6) + 1;
+         const steps = d1 + d2;
+ 
++        // Visual Dice Animation
++        await this.board.rollDiceAnimation(d1, d2);
++
+         const me = this.players[this.myPlayerId];
+         const passedGo = me.move(steps);
+ 
+@@ -213,7 +244,14 @@ export class Game {
+         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
+         updates[`rooms/${this.roomId}/gameState/lastDice`] = [d1, d2];
+ 
+-        await update(ref(db), updates);
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db), updates);
++            } catch (e) {
++                console.error(e);
++                this.isOfflineMode = true;
++            }
++        }
+ 
+         // Wait for animation to finish (300ms per step + 500ms buffer)
+         const animationDelay = (steps * 300) + 500;
+@@ -230,7 +268,21 @@ export class Game {
+             console.log("Doubles! Roll Again.");
+         }
+ 
+-        await update(ref(db), updates);
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db), updates);
++            } catch (e) {
++                console.error(e);
++                this.isOfflineMode = true;
++            }
++        }
++
++        // Only reset flag if turn actually changed or strictly needed. 
++        // Actually, updateUI will run again when DB updates turnIndex. 
++        // But if doubles, we stay.
++        this.isProcessingTurn = false;
++        // Trigger UI update manually to ensure button state re-checked immediately if needed
++        this.updateUI();
+     }
+ 
+     async checkTileInteraction(position) {
+@@ -256,8 +308,151 @@ export class Game {
+             }
+         } else if (tile.type === 'tax') {
+             await this.payTax(tile);
++        } else if (tile.type === 'chance') {
++            console.log("Triggering Chance Card...");
++            await this.drawCard('chance');
++        } else if (tile.type === 'chest') {
++            console.log("Triggering Chest Card...");
++            await this.drawCard('chest');
++        }
++    }
++
++    async drawCard(type) {
++        console.log("drawCard called with type:", type);
++        try {
++            const isChance = type === 'chance';
++            const deck = isChance ? CHANCE_CARDS : CHEST_CARDS;
++
++            if (!deck || deck.length === 0) {
++                console.error("Deck is empty or undefined!", deck);
++                return;
++            }
++
++            const card = deck[Math.floor(Math.random() * deck.length)];
++            console.log("Drawn Card:", card);
++
++            // UI Setup
++            const modal = document.getElementById('card-modal');
++            if (!modal) {
++                console.error("Card Modal not found in DOM!");
++                return;
++            }
++            const display = modal.querySelector('.card-display');
++            const front = modal.querySelector('.card-front');
++            const title = document.getElementById('card-type-title');
++            const desc = document.getElementById('card-desc');
++            const btnOk = document.getElementById('btn-card-ok');
++
++            // Reset State
++            display.classList.remove('flipped');
++            modal.classList.remove('hidden');
++
++            // Style Logic
++            if (isChance) {
++                front.classList.remove('chest-style');
++                title.textContent = "機會";
++                title.style.color = "#d32f2f";
++            } else {
++                front.classList.add('chest-style');
++                title.textContent = "命運";
++                title.style.color = "#7b1fa2";
++            }
++
++            desc.innerHTML = card.text;
++
++            // Animate Flip
++            await new Promise(r => setTimeout(r, 100)); // Small delay for rendering
++            await new Promise(r => setTimeout(r, 600)); // Wait before flip
++            display.classList.add('flipped');
++
++            // Wait for User confirmation
++            await new Promise(resolve => {
++                btnOk.onclick = () => {
++                    modal.classList.add('hidden');
++                    resolve();
++                };
++            });
++
++            // Apply Effect
++            await this.applyCardEffect(card);
++        } catch (e) {
++            console.error("Error drawing card:", e);
+         }
+     }
++    async applyCardEffect(card) {
++        console.log("[applyCardEffect] Applying card:", card);
++        const me = this.players[this.myPlayerId];
++        if (!me) {
++            console.error("[applyCardEffect] 'me' (local player) is undefined!");
++            return;
++        }
++        console.log("[applyCardEffect] Before Effect - Balance:", me.balance, "Pos:", me.position);
++
++        let msg = "";
++
++        switch (card.type) {
++            case 'money':
++                me.balance += card.value;
++                msg = card.value > 0 ? `獲得獎金 $${card.value}` : `支付 $${Math.abs(card.value)}`;
++                break;
++            case 'move':
++                const oldPos = me.position;
++                me.move(card.value);
++                // Handle potential negative wrap-around if needed, but Player.move handles forward
++                // Let's assume simple add for now, syncing logic below overrides position
++                msg = `移動 ${Math.abs(card.value)} 格`;
++                break;
++            case 'moveto':
++                me.position = card.value;
++                msg = `移動到指定地點`;
++                break;
++            case 'jail':
++                me.position = 10; // Jail ID
++                me.isJailed = true; // Need to support this flag in Player model fully
++                msg = "被送進監獄！";
++                break;
++            case 'collect':
++                // Not fully implemented yet, just give money from bank for now
++                me.balance += card.value;
++                msg = `從大家那裡獲得 $${card.value} (暫由銀行支付)`;
++                break;
++            default:
++                console.warn("Unknown card type:", card.type);
++        }
++
++        console.log("[applyCardEffect] After Effect - Balance:", me.balance, "Pos:", me.position);
++        this.setGameMessage(msg, "#00ff00");
++        this.updateUI(); // Optimistic update
++
++        const updates = {};
++        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = Number(me.balance);
++        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = Number(me.position);
++        // Jailed status update would go here
++
++        console.log("[applyCardEffect] Sending updates to Firebase:", updates);
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db), updates);
++            } catch (e) {
++                console.error("Firebase update failed, continuing in local mode:", e);
++                this.isOfflineMode = true;
++            }
++        }
++
++        // If moved, check interaction again? 
++        // Standard Monopoly rules: if moved to new tile, trigger that tile.
++        // Prevent infinite loops (e.g. Chance -> GoToJail -> Jail)
++        if (['move', 'moveto'].includes(card.type)) {
++            await new Promise(r => setTimeout(r, 1000));
++            // Recursive check, effectively
++            // But we need to be careful. For now let's just update position visually.
++            // If we want real chaining, we call checkTileInteraction again.
++            // But we must reset `wait` or ensure we don't recurse indefinitely.
++            // Simplest MVP: Just move them.
++        }
++
++
++    }
+ 
+     offerPropertyBuy(tile) {
+         return new Promise((resolve) => {
+@@ -293,13 +488,26 @@ export class Game {
+             document.getElementById('btn-modal-action').onclick = async () => {
+                 const p = this.players[this.myPlayerId];
+                 p.balance -= tile.price;
++                
++                // Add property locally
++                if(!this.gameState.properties) this.gameState.properties = {};
++                this.gameState.properties[tile.id] = this.myPlayerId;
+ 
+                 const updates = {};
+                 updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = p.balance;
+                 updates[`rooms/${this.roomId}/gameState/properties/${tile.id}`] = this.myPlayerId;
+ 
+-                await update(ref(db), updates);
+                 this.setGameMessage(`你買下了 ${tile.name}!`, "#00ff00");
++                this.updateUI(); // Optimistic update
++
++                if (this.roomId !== 'debug_room') {
++                    try {
++                        await update(ref(db), updates);
++                    } catch (e) {
++                        console.error("Firebase update failed, continuing in local mode:", e);
++                        this.isOfflineMode = true;
++                    }
++                }
+ 
+                 cleanup();
+                 resolve();
+@@ -323,14 +531,24 @@ export class Game {
+         const owner = this.players[ownerId];
+ 
+         me.balance -= rent;
++        if(owner) owner.balance += rent;
++
++        this.updateUI(); // Optimistic update
+ 
+         const updates = {};
+         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
+         if (owner) {
+-            updates[`rooms/${this.roomId}/players/${ownerId}/balance`] = owner.balance + rent;
++            updates[`rooms/${this.roomId}/players/${ownerId}/balance`] = owner.balance;
+         }
+ 
+-        await update(ref(db), updates);
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db), updates);
++            } catch (e) {
++                console.error("Firebase update failed, continuing in local mode:", e);
++                this.isOfflineMode = true;
++            }
++        }
+         await new Promise(r => setTimeout(r, 2000));
+     }
+ 
+@@ -338,18 +556,39 @@ export class Game {
+         const me = this.players[this.myPlayerId];
+         me.balance -= tile.price;
+         this.setGameMessage(`繳納稅金 $${tile.price}`, "orange");
++        this.updateUI(); // Optimistic update
+ 
+         const updates = {};
+         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
+-        await update(ref(db), updates);
++        
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db), updates);
++            } catch (e) {
++                console.error("Firebase update failed, continuing in local mode:", e);
++                this.isOfflineMode = true;
++            }
++        }
+         await new Promise(r => setTimeout(r, 1500));
+     }
+ 
+     async forceNextTurn() {
+         if (!this.gameState.playerOrder || this.gameState.playerOrder.length === 0) return;
+         const nextIndex = (this.gameState.turnIndex + 1) % this.gameState.playerOrder.length;
+-        await update(ref(db, `rooms/${this.roomId}/gameState`), {
+-            turnIndex: nextIndex
+-        });
++        
++        // Optimistic update
++        this.gameState.turnIndex = nextIndex;
++        this.updateUI();
++
++        if (this.roomId !== 'debug_room') {
++            try {
++                await update(ref(db, `rooms/${this.roomId}/gameState`), {
++                    turnIndex: nextIndex
++                });
++            } catch (e) {
++                console.error("Firebase update failed, continuing in local mode:", e);
++                this.isOfflineMode = true;
++            }
++        }
+     }
+ }
+diff --git a/js/main.js b/js/main.js
+index 8534edb..1df74c1 100644
+--- a/js/main.js
++++ b/js/main.js
+@@ -254,6 +254,15 @@ function startGame() {
+                 }
+             }).catch(err => {
+                 console.error("Error fetching players:", err);
++                const mockPlayers = [currentPlayerId, 'p_debug_2'];
++                gameInstance.gameState.playerOrder = mockPlayers;
++                gameInstance.players = {
++                    [currentPlayerId]: { name: "玩家", color: "#00f0ff", balance: 15000, position: 0 },
++                    'p_debug_2': { name: "對手", color: "#ff0099", balance: 15000, position: 0 }
++                };
++                gameInstance.isOfflineMode = true; // FORCE OFFLINE TO PREVENT ROLLBACK GLITCHES
++                gameInstance.board.updateTokens(Object.values(gameInstance.players));
++                gameInstance.updateUI();
+             });
+         } else {
+             console.log("I am Client. Waiting for Host to init Game State...");
+diff --git a/js/player.js b/js/player.js
+index ea3eebf..49dece4 100644
+--- a/js/player.js
++++ b/js/player.js
+@@ -3,15 +3,21 @@ export class Player {
+         this.id = id;
+         this.name = data.name;
+         this.color = data.color;
+-        this.balance = data.balance;
+-        this.position = data.position || 0;
++        this.balance = Number(data.balance);
++        this.position = Number(data.position || 0);
+         this.isJailed = data.isJailed || false;
+     }
+ 
+     // Advance position and return true if passed GO
+     move(steps) {
+         const oldPos = this.position;
+-        this.position = (this.position + steps) % 40;
++        // Handle negative steps correctly for JS modulo
++        this.position = (this.position + steps + 40) % 40;
++
++        // Pass GO logic:
++        // Forward: simple wrap around detection
++        // Backward: usually doesn't count as passing GO for money, but let's stick to simple logic
++        // If moving forward (steps > 0) and new position is smaller than old, we passed GO.
+         return this.position < oldPos && steps > 0;
+     }
+ }
+diff --git a/startup_log.txt b/startup_log.txt
+index 686f057..175b825 100644
+--- a/startup_log.txt
++++ b/startup_log.txt
+@@ -70,3 +70,20 @@ Run at: 2026/01/12 
+ Initialization Git repository... 
+ Reinitialized existing Git repository in C:/Users/a9804/Desktop/VSCODE/Monopoly/.git/
+ Add all files... 
++warning: in the working copy of 'startup_log.txt', LF will be replaced by CRLF the next time Git touches it
++Commit changes... 
++[main 7b11868] Startup Auto-Upload: 2026/01/12 週一 23:59:56.82
++ 1 file changed, 22 insertions(+)
++Rename branch to main... 
++Setting remote repository... 
++Pushing to GitHub... 
++To https://github.com/3b332042/Monopoly.git
++ ! [rejected]        main -> main (fetch first)
++error: failed to push some refs to 'https://github.com/3b332042/Monopoly.git'
++hint: Updates were rejected because the remote contains work that you do not
++hint: have locally. This is usually caused by another repository pushing to
++hint: the same ref. If you want to integrate the remote changes, use
++hint: 'git pull' before pushing again.
++hint: See the 'Note about fast-forwards' in 'git push --help' for details.
++Done! 
++---------------------------------------- 
+diff --git a/startup_upload.bat b/startup_upload.bat
+deleted file mode 100644
+index ff097b2..0000000
+--- a/startup_upload.bat
++++ /dev/null
+@@ -1,25 +0,0 @@
+-@echo off
+-cd /d "c:\Users\a9804\Desktop\VSCODE\Monopoly"
+-echo ---------------------------------------- >> startup_log.txt
+-echo Run at: %date% %time% >> startup_log.txt
+-echo Initialization Git repository... >> startup_log.txt
+-git init >> startup_log.txt 2>&1
+-
+-echo Add all files... >> startup_log.txt
+-git add . >> startup_log.txt 2>&1
+-
+-echo Commit changes... >> startup_log.txt
+-git commit -m "Startup Auto-Upload: %date% %time%" >> startup_log.txt 2>&1
+-
+-echo Rename branch to main... >> startup_log.txt
+-git branch -M main >> startup_log.txt 2>&1
+-
+-echo Setting remote repository... >> startup_log.txt
+-git remote remove origin >> startup_log.txt 2>&1
+-git remote add origin https://3b332042@github.com/3b332042/Monopoly.git >> startup_log.txt 2>&1
+-
+-echo Pushing to GitHub... >> startup_log.txt
+-git push -u origin main >> startup_log.txt 2>&1
+-
+-echo Done! >> startup_log.txt
+-echo ---------------------------------------- >> startup_log.txt

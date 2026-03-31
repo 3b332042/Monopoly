@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/ui.css">
     <link rel="stylesheet" href="css/board.css">
+    <link rel="stylesheet" href="css/dice.css">
     <style>
         #error-log {
             position: fixed;
@@ -81,20 +82,24 @@
             <h1 style="font-size:1.5rem; margin:10px;">Neon Monopoly <span style="font-size:0.8rem; color:gray;">(Room:
                     <span id="game-room-id"></span>)</span></h1>
 
-            <!-- DEBUG INFO -->
+            <!-- DEBUG/CASH OVERLAY -->
             <div id="debug-overlay" style="
                 position: absolute; 
-                top: 10px; 
-                right: 10px; 
-                background: rgba(0,0,0,0.8); 
-                padding: 10px; 
-                border: 1px solid red; 
-                font-family: monospace; 
-                font-size: 12px;
+                top: 20px; 
+                right: 30px; 
+                background: rgba(15, 15, 26, 0.85); 
+                backdrop-filter: blur(10px);
+                padding: 20px 25px; 
+                border: 2px solid var(--accent-color); 
+                border-radius: 12px;
+                box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+                font-family: 'Segoe UI', sans-serif; 
+                font-size: 16px;
                 text-align: right;
                 z-index: 1000;
+                min-width: 250px;
             ">
-                Debug Info...
+                Loading Data...
             </div>
 
             <div id="game-board-container"></div>
@@ -113,10 +118,182 @@
                     </div>
                 </div>
             </div>
+
+            <!-- CARD MODAL (Chance/Chest) -->
+            <div id="card-modal" class="modal-overlay hidden">
+                <div class="card-display">
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <div class="card-logo">?</div>
+                            <h2 id="card-type-title">CHANCE</h2>
+                        </div>
+                        <div class="card-back">
+                            <h3 id="card-desc">Go Back 3 Spaces</h3>
+                            <button id="btn-card-ok" class="btn primary">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- STATION MODAL (Fly) -->
+            <div id="station-modal" class="modal-overlay hidden">
+                <div class="modal-content neon-box" style="border-color: #00ffff; box-shadow: 0 0 20px rgba(0,255,255,0.5);">
+                    <h2 id="station-title">車站</h2>
+                    <div id="modal-body">
+                        <p>前往任意地點車票: <span id="station-price" class="highlight-text">$800</span></p>
+                        <div style="margin: 15px 0;">
+                            <label for="station-dest-select" style="display:block; margin-bottom:5px;">請選擇目的地:</label>
+                            <select id="station-dest-select" style="width:100%; padding:10px; background:#111; color:#fff; border:1px solid #00ffff; font-size:16px;">
+                                <!-- Options will be injected by js -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-station-buy" class="btn primary">搭車</button>
+                        <button id="btn-station-cancel" class="btn secondary">取消</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JAIL MODAL -->
+            <div id="jail-modal" class="modal-overlay hidden" style="z-index: 500;">
+                <div class="modal-content neon-box" style="border-color: #ff0000; box-shadow: 0 0 20px rgba(255,0,0,0.5);">
+                    <h2 style="color: #ff0000;">🚨 探監拘留所</h2>
+                    <div id="modal-body">
+                        <p id="jail-status-desc" style="margin-bottom: 20px;">你已經被關了 0 回合。</p>
+                        <p style="color: #ccc; font-size: 14px;">你可以選擇支付保釋金，或者嘗試運氣擲出雙點數！</p>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-jail-pay" class="btn primary" style="background:#ff3333; color:white;">付保釋金 $1500</button>
+                        <button id="btn-jail-roll" class="btn secondary">嘗試擲雙點數</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UPGRADE MODAL -->
+            <div id="upgrade-modal" class="modal-overlay hidden" style="z-index: 500;">
+                <div class="modal-content neon-box" style="border-color: #ffaa00; box-shadow: 0 0 20px rgba(255,170,0,0.5);">
+                    <h2 id="upgrade-title" style="color: #ffaa00;">🌟 升級別墅</h2>
+                    <div id="modal-body">
+                        <p id="upgrade-desc" style="margin-bottom: 20px;">你要花費 $YYY 將這塊地升級為等級 N 嗎？</p>
+                        <p style="color: #ccc; font-size: 14px;">(等級越高，被踩到的過路費越驚人！最高 Lv.3)</p>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-upgrade-yes" class="btn primary" style="background:#ffaa00; color:#000;">💸 花錢升級</button>
+                        <button id="btn-upgrade-no" class="btn secondary">放棄賺錢機會</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BANKRUPTCY MODAL -->
+            <div id="bankruptcy-modal" class="modal-overlay hidden" style="z-index: 600;">
+                <div class="modal-content neon-box" style="border-color: #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.8); text-align:center;">
+                    <h2 id="bankrupt-title" style="color:#ff0000; font-size: 2em;">💀 宣告破產</h2>
+                    <p id="bankrupt-desc" style="color:#ccc; margin: 15px 0;">你的所有資產已被沒收</p>
+                    <button id="btn-bankrupt-ok" class="btn primary" style="background:#ff0000; color:white; width:100%; margin-top:10px;">😢 認輸退出</button>
+                </div>
+            </div>
+
+            <!-- ACQUIRE MODAL -->
+            <div id="acquire-modal" class="modal-overlay hidden" style="z-index: 550;">
+                <div class="modal-content neon-box" style="border-color: #ff9900; box-shadow: 0 0 25px rgba(255,153,0,0.7);">
+                    <h2 id="acquire-title" style="color:#ff9900;">🏢 強制收購</h2>
+                    <div>
+                        <p id="acquire-desc" style="margin-bottom:8px;"></p>
+                        <p id="acquire-price-desc" style="color:#ffcc66; margin-bottom: 20px; font-size:13px;"></p>
+                        <p style="color:#aaa; font-size:12px;">收購後土地回復裸地狀態 (Lv.0)，建築物消失。</p>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-acquire-yes" class="btn primary" style="background:#ff9900; color:#000;">💰 強制收購</button>
+                        <button id="btn-acquire-no" class="btn secondary">放棄</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AUCTION SETUP MODAL (Seller only) -->
+            <div id="auction-setup-modal" class="modal-overlay hidden" style="z-index: 560;">
+                <div class="modal-content neon-box" style="border-color: #aa00ff; box-shadow: 0 0 25px rgba(170,0,255,0.7);">
+                    <h2 style="color:#aa00ff;">🔨 發起競拍</h2>
+                    <p style="color:#ccc; margin-bottom:15px;">選擇要拍賣的地產並設定起拍價。<br>需支付 <span style="color:#ff4444;">$700 押金</span>，流拍不退回。</p>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block; margin-bottom:5px; color:#aaa;">選擇地產：</label>
+                        <select id="auction-tile-select" style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #aa00ff; font-size:14px;"></select>
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label style="display:block; margin-bottom:5px; color:#aaa;">起拍價格：</label>
+                        <input type="number" id="auction-start-price" placeholder="輸入起拍金額" min="1" style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #aa00ff; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    <div class="modal-actions">
+                        <button id="btn-auction-start" class="btn primary" style="background:#aa00ff; color:white;">🔨 開始競拍 (押金 $700)</button>
+                        <button id="btn-auction-setup-cancel" class="btn secondary">取消</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AUCTION BIDDING MODAL (All players) -->
+            <div id="auction-bidding-modal" class="modal-overlay hidden" style="z-index: 560;">
+                <div class="modal-content neon-box" style="border-color: #aa00ff; box-shadow: 0 0 30px rgba(170,0,255,0.8);">
+                    <h2 style="color:#aa00ff;">🔨 競拍進行中</h2>
+                    <p id="auction-bid-tile-name" style="font-size:1.2em; color:#fff; margin-bottom:5px;"></p>
+                    <p id="auction-bid-seller" style="color:#aaa; font-size:13px; margin-bottom:15px;"></p>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div>
+                            <div style="color:#aaa; font-size:12px;">目前最高出價</div>
+                            <div id="auction-current-bid" style="color:#00ff88; font-size:1.8em; font-weight:bold;">$0</div>
+                            <div id="auction-current-bidder" style="color:#aaa; font-size:12px;"></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="color:#aaa; font-size:12px;">剩餘時間</div>
+                            <div id="auction-timer" style="color:#ff4444; font-size:1.8em; font-weight:bold;">30</div>
+                        </div>
+                    </div>
+                    <div id="auction-bid-controls" style="margin-bottom:12px;">
+                        <input type="number" id="auction-bid-input" placeholder="輸入出價" min="1" style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #aa00ff; font-size:14px; margin-bottom:8px; box-sizing:border-box;">
+                        <button id="btn-place-bid" class="btn primary" style="background:#aa00ff; color:white; width:100%;">💰 出價</button>
+                    </div>
+                    <div id="auction-seller-view" class="hidden">
+                        <p style="color:#aaa; text-align:center; font-style:italic;">你是賣方，等待其他人出價中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AUCTION RESULT MODAL -->
+            <div id="auction-result-modal" class="modal-overlay hidden" style="z-index: 570;">
+                <div class="modal-content neon-box" style="border-color: #aa00ff; text-align:center;">
+                    <h2 id="auction-result-title" style="color:#aa00ff; font-size:1.8em;">🔨 競拍結束</h2>
+                    <p id="auction-result-desc" style="color:#ccc; margin:15px 0; font-size:1.1em;"></p>
+                    <button id="btn-auction-result-ok" class="btn primary" style="background:#aa00ff; color:white; width:100%;">確認</button>
+                </div>
+            </div>
+
+            <!-- ADMIN CONSOLE (Bottom Left) -->
+            <div id="admin-console" style="position: absolute; bottom: 10px; left: 10px; background: rgba(30,10,50,0.9); color: #0cf; padding: 15px; border: 2px solid #0cf; border-radius: 8px; z-index: 1000; font-size: 14px; box-shadow: 0 0 10px #0cf;">
+                <h3 style="margin-top:0; margin-bottom:10px; font-size:16px; color:#fff; text-shadow: 0 0 5px #0cf;">🛠️ 開發者主控台</h3>
+                
+                <div style="margin-bottom: 8px;">
+                    <input type="number" id="admin-teleport-val" placeholder="格位 ID (0-39)" style="width:100px; padding:3px; background:#000; color:#fff; border:1px solid #0cf;">
+                    <button id="btn-admin-teleport" style="background:#0cf; color:#000; border:none; padding:4px 8px; cursor:pointer;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">傳送</button>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <input type="number" id="admin-money-val" placeholder="增減金額 (±)" style="width:100px; padding:3px; background:#000; color:#fff; border:1px solid #0f0;">
+                    <button id="btn-admin-money" style="background:#0f0; color:#000; border:none; padding:4px 8px; cursor:pointer;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">修改資金</button>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <input type="number" id="admin-d1-val" placeholder="骰1" min="1" max="6" style="width:45px; padding:3px; background:#000; color:#fff; border:1px solid #f0f;">
+                    <input type="number" id="admin-d2-val" placeholder="骰2" min="1" max="6" style="width:45px; padding:3px; background:#000; color:#fff; border:1px solid #f0f;">
+                    <button id="btn-admin-dice" style="background:#f0f; color:#fff; border:none; padding:4px 8px; cursor:pointer;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">作弊擲骰</button>
+                </div>
+
+                <div>
+                    <button id="btn-admin-next" style="width: 100%; background:#f00; color:#fff; border:none; padding:6px; cursor:pointer; font-weight:bold;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">強制結束此回合</button>
+                </div>
+            </div>
+
         </div>
 
         <!-- Type module allows us to use import/export -->
-        <script type="module" src="js/main.js"></script>
+        <script type="module" src="js/main.js?v=16"></script>
 </body>
 
 </html>

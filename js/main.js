@@ -1,4 +1,4 @@
-import { db, ref, set, onValue, update, push, get, child } from './firebase.js';
+import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=16';
 
 // DOM Elements
 const lobbyScreen = document.getElementById('lobby-screen');
@@ -189,8 +189,8 @@ function startGameRequest() {
     });
 }
 
-import { Board } from './board.js';
-import { Game } from './game.js';
+import { Board } from './board.js?v=16';
+import { Game } from './game.js?v=16';
 
 let gameBoard = null;
 let gameInstance = null;
@@ -230,31 +230,52 @@ function startGame() {
         // If Host (or Debug), init the game state
         if (isHost) {
             console.log("I am Host. Attempting to initialize Game State...");
-            // Try to fetch real players
-            get(ref(db, `rooms/${currentRoomId}/players`)).then(snap => {
-                if (snap.exists()) {
-                    const players = Object.keys(snap.val());
-                    console.log("Found players:", players);
-                    gameInstance.startGame(players).then(() => {
-                        console.log("Game State Initialized in DB!");
-                    }).catch(err => console.error("Failed to write Game State:", err));
-                } else {
-                    console.error("No players found in DB!");
-                    // Mock for Debug Button
-                    const mockPlayers = ['p_debug_1', 'p_debug_2'];
-                    // We also need to seed the visual players because syncPlayers won't trigger if DB is empty
+            // Ensure gameInstance and network exist before trying to fetch
+            if (!gameInstance || !gameInstance.network) {
+                console.error("Critical Error: gameInstance.network is undefined! Game object:", gameInstance);
+                // Fallback to offline mode for debug automatically
+                const mockPlayers = [currentPlayerId, 'p_debug_2'];
+                gameInstance.gameState.playerOrder = mockPlayers;
+                gameInstance.players = {
+                    [currentPlayerId]: { name: "玩家", color: "#00f0ff", balance: 15000, position: 0 },
+                    'p_debug_2': { name: "對手", color: "#ff0099", balance: 15000, position: 0 }
+                };
+                if (gameInstance.board) gameInstance.board.updateTokens(Object.values(gameInstance.players));
+                if (gameInstance.updateUI) gameInstance.updateUI();
+            } else {
+                gameInstance.network.fetchPlayers().then(data => {
+                    if (data) {
+                        const players = Object.keys(data);
+                        console.log("Found players:", players);
+                        gameInstance.network.initGame(players).then(() => {
+                            console.log("Game State Initialized in DB!");
+                        }).catch(err => console.error("Failed to write Game State:", err));
+                    } else {
+                        console.error("No players found in DB!");
+                        // Mock for Debug Button
+                        const mockPlayers = ['p_debug_1', 'p_debug_2'];
+                        gameInstance.gameState.playerOrder = mockPlayers;
+                        gameInstance.players = {
+                            'p_debug_1': { name: "Debug P1", color: "red", balance: 15000, position: 0 },
+                            'p_debug_2': { name: "Debug P2", color: "lime", balance: 15000, position: 0 }
+                        };
+                        gameInstance.board.updateTokens(Object.values(gameInstance.players));
+                        gameInstance.network.initGame(mockPlayers);
+                        gameInstance.updateUI();
+                    }
+                }).catch(err => {
+                    console.error("Error fetching players:", err);
+                    const mockPlayers = [currentPlayerId, 'p_debug_2'];
                     gameInstance.gameState.playerOrder = mockPlayers;
                     gameInstance.players = {
-                        'p_debug_1': { name: "Debug P1", color: "red", balance: 15000, position: 0 },
-                        'p_debug_2': { name: "Debug P2", color: "lime", balance: 15000, position: 0 }
+                        [currentPlayerId]: { name: "玩家", color: "#00f0ff", balance: 15000, position: 0 },
+                        'p_debug_2': { name: "對手", color: "#ff0099", balance: 15000, position: 0 }
                     };
+                    gameInstance.network.forceOffline(); // FORCE OFFLINE TO PREVENT ROLLBACK GLITCHES
                     gameInstance.board.updateTokens(Object.values(gameInstance.players));
-                    gameInstance.startGame(mockPlayers);
                     gameInstance.updateUI();
-                }
-            }).catch(err => {
-                console.error("Error fetching players:", err);
-            });
+                });
+            }
         } else {
             console.log("I am Client. Waiting for Host to init Game State...");
         }
@@ -263,14 +284,68 @@ function startGame() {
     // Expose for debugging
     window.game = gameInstance;
 
+    // --- Admin Console Bindings ---
+    const btnTeleport = document.getElementById('btn-admin-teleport');
+    if (btnTeleport) {
+        btnTeleport.addEventListener('click', () => {
+            if (!gameInstance) return;
+            const val = parseInt(document.getElementById('admin-teleport-val').value);
+            if (!isNaN(val) && val >= 0 && val <= 39) {
+                gameInstance.adminTeleport(val);
+            } else {
+                alert("請輸入有效的格位 ID (0-39)");
+            }
+        });
+    }
+
+    const btnMoney = document.getElementById('btn-admin-money');
+    if (btnMoney) {
+        btnMoney.addEventListener('click', () => {
+            if (!gameInstance) return;
+            const val = parseInt(document.getElementById('admin-money-val').value);
+            if (!isNaN(val)) {
+                gameInstance.adminAddMoney(val);
+            }
+        });
+    }
+
+    const btnDice = document.getElementById('btn-admin-dice');
+    if (btnDice) {
+        btnDice.addEventListener('click', () => {
+            if (!gameInstance) return;
+            const d1 = parseInt(document.getElementById('admin-d1-val').value);
+            const d2 = parseInt(document.getElementById('admin-d2-val').value);
+            if (!isNaN(d1) && !isNaN(d2) && d1 > 0 && d2 > 0) {
+                gameInstance.rollDice(d1, d2);
+            } else {
+                alert("請輸入有效的骰子點數 (1-6)");
+            }
+        });
+    }
+
+    const btnNext = document.getElementById('btn-admin-next');
+    if (btnNext) {
+        btnNext.addEventListener('click', () => {
+            if (gameInstance) gameInstance.forceNextTurn();
+        });
+    }
+    // ------------------------------
+
     // Bind Roll Button from Board UI
     const rollBtn = document.getElementById('roll-btn');
     if (rollBtn) {
-        // Cloning to remove old listeners if any
         const newBtn = rollBtn.cloneNode(true);
         rollBtn.parentNode.replaceChild(newBtn, rollBtn);
         newBtn.addEventListener('click', () => {
             gameInstance.rollDice();
+        });
+    }
+
+    // Bind Auction Button
+    const auctionBtn = document.getElementById('auction-btn');
+    if (auctionBtn) {
+        auctionBtn.addEventListener('click', () => {
+            if (gameInstance) gameInstance.openAuctionSetup();
         });
     }
 
@@ -279,12 +354,21 @@ function startGame() {
     if (forceBtn) {
         forceBtn.addEventListener('click', async () => {
             console.log("Force initializing...");
-            const snap = await get(ref(db, `rooms/${currentRoomId}/players`));
-            if (snap.exists()) {
-                await gameInstance.startGame(Object.keys(snap.val()));
-                alert("已強制重置遊戲狀態！");
-            } else {
-                alert("找不到玩家資料，無法初始化");
+            if (!gameInstance || !gameInstance.network) {
+                alert("遊戲尚未完全初始化，無法強制重置");
+                return;
+            }
+            try {
+                const data = await gameInstance.network.fetchPlayers();
+                if (data) {
+                    await gameInstance.network.initGame(Object.keys(data));
+                    alert("已強制重置遊戲狀態！");
+                } else {
+                    alert("找不到玩家資料，無法初始化");
+                }
+            } catch (err) {
+                console.error("Force initialize error:", err);
+                alert("強制重置失敗: " + err.message);
             }
         });
     }
