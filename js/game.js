@@ -816,7 +816,6 @@ export class Game {
         await this.network.pushAuction(auctionData);
         // Reset auction-closed guard for next auction
         this._auctionClosed = false;
-        this._latestAuctionData = null;
 
         const tileName = TILE_DATA.find(t => t.id === tileId)?.name || '未知地產';
         await this.network.pushLog('🔨', `${me.name} 發起了 ${tileName} 的公開競拍！起拍價 $${startPrice}`, '#aa00ff');
@@ -832,8 +831,15 @@ export class Game {
         // Always track the latest auction state for closeAuction to read
         this._latestAuctionData = auctionData;
 
+        // Reset the closed guard for bidders if we see a NEW auction starting
+        if (auctionData && this._lastAuctionTileId !== auctionData.tileId) {
+            this._auctionClosed = false;
+            this._lastAuctionTileId = auctionData.tileId;
+        }
+
         // No auction active
         if (!auctionData) {
+            this._lastAuctionTileId = null; // Clear ID to ensure next auction (even same tile) resets guard
             biddingModal.classList.add('hidden');
             if (this._auctionTimerInterval) {
                 clearInterval(this._auctionTimerInterval);
@@ -884,7 +890,10 @@ export class Game {
             };
         }
 
-        biddingModal.classList.remove('hidden');
+        // Only show if the auction is active and NOT already in the process of closing
+        if (!this._auctionClosed) {
+            biddingModal.classList.remove('hidden');
+        }
 
         // Capture the endTime for this interval
         const endTime = auctionData.endTime;
@@ -897,16 +906,21 @@ export class Game {
                 if (timerEl) timerEl.textContent = remaining;
 
                 if (remaining <= 0) {
+                    console.log("[Auction] Timer reached 0. closing...");
                     clearInterval(this._auctionTimerInterval);
                     this._auctionTimerInterval = null;
 
-                    // Only seller closes the auction, and only once
-                    if (isSeller && !this._auctionClosed) {
+                    if (!this._auctionClosed) {
                         this._auctionClosed = true;
-                        // Read the LATEST auction data from our local game state mirror
-                        // (Firebase listener would have kept auctionData stale in closure)
                         const latestAuction = this._latestAuctionData;
-                        if (latestAuction) await this.closeAuction(latestAuction);
+                        if (latestAuction) {
+                            this.closeAuction(latestAuction).catch(err => {
+                                console.error("[Auction] Error during closeAuction:", err);
+                                // Safety: Ensure modal is hidden even on error
+                                const biddingModal = document.getElementById('auction-bidding-modal');
+                                if (biddingModal) biddingModal.classList.add('hidden');
+                            });
+                        }
                     }
                 }
             }, 1000);
@@ -914,19 +928,35 @@ export class Game {
     }
 
     async closeAuction(auctionData) {
+        console.log("[Auction] Executing closeAuction for tile:", auctionData.tileId);
+        // --- 1. UI Updates FOR ALL PARTICIPANTS ---
         const biddingModal = document.getElementById('auction-bidding-modal');
-        if (biddingModal) biddingModal.classList.add('hidden');
+        if (biddingModal) {
+            console.log("[Auction] Hiding bidding modal.");
+            biddingModal.classList.add('hidden');
+        }
 
         const tile = TILE_DATA.find(t => t.id === auctionData.tileId);
         const hasBid = auctionData.currentBid >= auctionData.startingPrice && auctionData.currentBidderId;
+        const winner = auctionData.currentBidderId ? this.players[auctionData.currentBidderId] : null;
+        const seller = this.players[auctionData.sellerId];
+        const winnerName = winner?.name || '?';
+        const sellerName = seller?.name || '?';
+        const amount = auctionData.currentBid;
+
+        // Display results locally on every client
+        if (hasBid) {
+            this.showAuctionResult(`🎉 ${winnerName} 以 $${amount} 得標！\n${sellerName} 獲得 $${amount}。`, true);
+        } else {
+            this.showAuctionResult(`流拍！無人出價，押金 $700 不退回。\n${tile?.name} 保留在賣方手中。`, false);
+        }
+
+        // --- 2. Database Updates ONLY FOR THE SELLER ---
+        const isSeller = auctionData.sellerId === this.myPlayerId;
+        if (!isSeller) return; // Exit early if not seller
 
         const updates = {};
-
         if (hasBid) {
-            const winner = this.players[auctionData.currentBidderId];
-            const seller = this.players[auctionData.sellerId];
-            const amount = auctionData.currentBid;
-
             if (winner) winner.balance -= amount;
             if (seller) seller.balance += amount;
 
@@ -937,17 +967,12 @@ export class Game {
 
             updates[`rooms/${this.roomId}/auction`] = null;
             await this.network.pushUpdate(updates);
-
-            const winnerName = winner?.name || '?';
-            const sellerName = seller?.name || '?';
             await this.network.pushLog('🎉', `競拍成交！${winnerName} 以 $${amount} 得標 ${tile?.name}！${sellerName} 獲得 $${amount}。`, '#aa00ff');
-            this.showAuctionResult(`🎉 ${winnerName} 以 $${amount} 得標！\n${sellerName} 獲得 $${amount}。`, true);
         } else {
-            // No valid bids — deposit already deducted, property stays
+            // No valid bids — cleanup auction node
             updates[`rooms/${this.roomId}/auction`] = null;
             await this.network.pushUpdate(updates);
             await this.network.pushLog('💔', `流拍！無人出價 ${tile?.name}，押金 $700 不退回。`, '#ff4444');
-            this.showAuctionResult(`流拍！無人出價，押金 $700 不退回。\n${tile?.name} 保留在賣方手中。`, false);
         }
 
         this.updateUI();
