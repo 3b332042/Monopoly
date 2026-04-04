@@ -1,0 +1,46 @@
+export const PROFESSIONS = {
+    ENTREPRENEUR: {
+        id: 'ENTREPRENEUR',
+        name: '企業家',
+        icon: '💼',
+        color: '#ffd700',
+        description: '初始資金 +$5,000，購買地產優惠 10%',
+        bonusInitial: 5000,
+        buyDiscount: 0.1,
+    },
+    LANDLORD: {
+        id: 'LANDLORD',
+        name: '包租公',
+        icon: '🏠',
+        color: '#ff66b2',
+        description: '過路費收入 +20%',
+        rentBonus: 0.2,
+    },
+    TRAVELER: {
+        id: 'TRAVELER',
+        name: '旅行者',
+        icon: '✈️',
+        color: '#00ffff',
+        description: '高鐵半價，經過起點獲得 $2,500',
+        stationDiscount: 0.5,
+        goBonus: 2500,
+    },
+    GAMBLER: {
+        id: 'GAMBLER',
+        name: '賭徒',
+        icon: '🎲',
+        color: '#ff4500',
+        description: '擲出雙子獲得 $500，保釋金降至 $1,000',
+        doubleBonus: 500,
+        bailCost: 1000,
+    },
+    POLICE: {
+        id: 'POLICE',
+        name: '警員',
+        icon: '👮',
+        color: '#1e90ff',
+        description: '免收保釋金，探監時獲得 $1,000',
+        freeBail: true,
+        jailVisitBonus: 1000,
+    }
+};

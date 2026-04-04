@@ -268,6 +268,27 @@
                 </div>
             </div>
 
+            <!-- VICTORY MODAL (The ultimate winner screen) -->
+            <div id="victory-modal" class="modal-overlay hidden" style="z-index: 2000;">
+                <div class="modal-content neon-box" style="border-color: #ffaa00; box-shadow: 0 0 60px rgba(255,170,0,0.6); text-align:center; padding: 40px; background: rgba(20, 15, 5, 0.95);">
+                    <h1 style="color:#ffaa00; font-size: 3.5em; margin-bottom: 20px; text-shadow: 0 0 30px #ffaa00; font-style: italic;">🏆 最終勝利 🏆</h1>
+                    <div id="victory-winner-name" style="font-size: 2.8em; color: #fff; margin-bottom: 30px; font-weight: bold; text-shadow: 0 0 10px #fff;">玩家名稱</div>
+                    <p style="color:#eee; margin-bottom: 35px; font-size: 1.2em; line-height: 1.6;">恭喜成為本場比賽最後的大富翁！<br>所有對手已全數破產，這座城市現在屬於你了。</p>
+                    <button id="btn-victory-restart" class="btn primary" style="width: 100%; font-size: 1.4em; padding: 15px 0; background: linear-gradient(45deg, #ffaa00, #ff5500); border: none; color: #fff; box-shadow: 0 5px 15px rgba(255,85,0,0.4);">回到大廳 (重新開始)</button>
+                </div>
+            </div>
+
+            <!-- CAREER SELECTION MODAL -->
+            <div id="career-modal" class="modal-overlay hidden" style="z-index: 3000;">
+                <div class="modal-content neon-box" style="width: 90%; max-width: 800px; border-color: #00f0ff; background: rgba(10, 10, 20, 0.95);">
+                    <h2 style="color: #00f0ff; font-size: 2em; margin-bottom: 30px;">選擇你的職業</h2>
+                    <div id="career-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                        <!-- Career cards will be injected by JS -->
+                    </div>
+                    <p style="color: #aaa; font-size: 14px;">職業選擇後無法更改，請審慎考慮！</p>
+                </div>
+            </div>
+
             <!-- ADMIN CONSOLE (Bottom Left) -->
             <div id="admin-console" style="display: none; position: absolute; bottom: 10px; left: 10px; background: rgba(30,10,50,0.9); color: #0cf; padding: 15px; border: 2px solid #0cf; border-radius: 8px; z-index: 1000; font-size: 14px; box-shadow: 0 0 10px #0cf;">
                 <h3 style="margin-top:0; margin-bottom:10px; font-size:16px; color:#fff; text-shadow: 0 0 5px #0cf;">🛠️ 開發者主控台</h3>
@@ -296,7 +317,7 @@
         </div>
 
         <!-- Type module allows us to use import/export -->
-        <script type="module" src="js/main.js?v=17"></script>
+        <script type="module" src="js/main.js?v=18"></script>
 </body>
 
 </html>

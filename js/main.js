@@ -250,45 +250,43 @@ function startGame() {
 
     // Initialize Game Logic
     if (!gameInstance) {
-        // DEBUG MODE: If no room ID (user used Debug Button directly), create fake data
-        if (!currentRoomId) {
-            console.warn("Debug Mode: Using Mock Data");
-            currentRoomId = "debug_room";
-            currentPlayerId = "p_debug_1";
-            isHost = true;
-
-            // Mock DB State for local testing (client-side only trick isn't enough for Firebase, 
-            // but we can at least simulate the Game object state locally or force a write to a debug node)
-        }
-
         gameInstance = new Game(currentRoomId, currentPlayerId, gameBoard);
+
+        // --- CAREER SELECTION FLOW ---
+        const handleCareerSelection = async () => {
+            const me = gameInstance.players[currentPlayerId];
+            if (me && !me.career) {
+                console.log("No career found, showing selection modal...");
+                const careerId = await gameInstance.ui.showCareerSelection();
+                console.log("Career selected:", careerId);
+                
+                const updates = {};
+                updates[`rooms/${currentRoomId}/players/${currentPlayerId}/career`] = careerId;
+                
+                // Entrepreneur Bonus
+                if (careerId === 'ENTREPRENEUR') {
+                    updates[`rooms/${currentRoomId}/players/${currentPlayerId}/balance`] = me.balance + 5000;
+                }
+                
+                await gameInstance.network.pushUpdate(updates);
+                await gameInstance.network.pushLog('👔', `${me.name} 選擇了職業：${gameInstance.getCareer(currentPlayerId).name}`, '#fff');
+            }
+        };
 
         // If Host (or Debug), init the game state
         if (isHost) {
             console.log("I am Host. Attempting to initialize Game State...");
             // Ensure gameInstance and network exist before trying to fetch
             if (!gameInstance || !gameInstance.network) {
-                console.error("Critical Error: gameInstance.network is undefined! Game object:", gameInstance);
-                // Fallback to offline mode for debug automatically
-                const mockPlayers = [currentPlayerId, 'p_debug_2'];
-                gameInstance.gameState.playerOrder = mockPlayers;
-                gameInstance.players = {
-                    [currentPlayerId]: { name: "玩家", color: "#00f0ff", balance: 15000, position: 0 },
-                    'p_debug_2': { name: "對手", color: "#ff0099", balance: 15000, position: 0 }
-                };
-                if (gameInstance.board) gameInstance.board.updateTokens(Object.values(gameInstance.players));
-                if (gameInstance.updateUI) gameInstance.updateUI();
+                console.error("Critical Error: gameInstance.network is undefined!");
             } else {
-                gameInstance.network.fetchPlayers().then(data => {
+                gameInstance.network.fetchPlayers().then(async data => {
                     if (data) {
                         const players = Object.keys(data);
-                        console.log("Found players:", players);
-                        gameInstance.network.initGame(players).then(() => {
-                            console.log("Game State Initialized in DB!");
-                        }).catch(err => console.error("Failed to write Game State:", err));
+                        await gameInstance.network.initGame(players);
+                        await handleCareerSelection();
                     } else {
-                        console.error("No players found in DB!");
-                        // Mock for Debug Button
+                        // Mock for Debug
                         const mockPlayers = ['p_debug_1', 'p_debug_2'];
                         gameInstance.gameState.playerOrder = mockPlayers;
                         gameInstance.players = {
@@ -296,24 +294,21 @@ function startGame() {
                             'p_debug_2': { name: "Debug P2", color: "lime", balance: 15000, position: 0 }
                         };
                         gameInstance.board.updateTokens(Object.values(gameInstance.players));
-                        gameInstance.network.initGame(mockPlayers);
+                        await gameInstance.network.initGame(mockPlayers);
+                        await handleCareerSelection();
                         gameInstance.updateUI();
                     }
-                }).catch(err => {
-                    console.error("Error fetching players:", err);
-                    const mockPlayers = [currentPlayerId, 'p_debug_2'];
-                    gameInstance.gameState.playerOrder = mockPlayers;
-                    gameInstance.players = {
-                        [currentPlayerId]: { name: "玩家", color: "#00f0ff", balance: 15000, position: 0 },
-                        'p_debug_2': { name: "對手", color: "#ff0099", balance: 15000, position: 0 }
-                    };
-                    gameInstance.network.forceOffline(); // FORCE OFFLINE TO PREVENT ROLLBACK GLITCHES
-                    gameInstance.board.updateTokens(Object.values(gameInstance.players));
-                    gameInstance.updateUI();
                 });
             }
         } else {
             console.log("I am Client. Waiting for Host to init Game State...");
+            // Non-hosts also need to select career if they haven't
+            const checkMyCareer = setInterval(async () => {
+                if (gameInstance.players[currentPlayerId]) {
+                    clearInterval(checkMyCareer);
+                    await handleCareerSelection();
+                }
+            }, 500);
         }
     }
 

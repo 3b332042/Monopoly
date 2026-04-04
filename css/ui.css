@@ -305,3 +305,42 @@ input[type="text"]:focus {
     from { box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
     to { box-shadow: 0 4px 25px var(--toast-glow-color, rgba(255,255,255,0.1)); }
 }
+
+/* Career Cards */
+.career-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.career-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-5px);
+    border-color: var(--card-color, #fff);
+    box-shadow: 0 5px 20px var(--card-glow, rgba(255, 255, 255, 0.2));
+}
+
+.career-icon {
+    font-size: 2.5rem;
+    margin-bottom: 5px;
+}
+
+.career-name {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #fff;
+}
+
+.career-desc {
+    font-size: 0.8rem;
+    color: #aaa;
+    line-height: 1.4;
+    text-align: center;
+}

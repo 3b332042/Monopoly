@@ -1,3 +1,5 @@
+import { PROFESSIONS } from './professions.js';
+
 export class UIManager {
     constructor() {
         this.msgEl = document.getElementById('game-message');
@@ -8,6 +10,41 @@ export class UIManager {
         // Modals
         this.actionModal = document.getElementById('action-modal');
         this.cardModal = document.getElementById('card-modal');
+        this.careerModal = document.getElementById('career-modal');
+        this.careerList = document.getElementById('career-list');
+    }
+
+    showCareerSelection() {
+        return new Promise((resolve) => {
+            if (!this.careerModal || !this.careerList) {
+                console.error("Career modal not found");
+                resolve(Object.keys(PROFESSIONS)[0]);
+                return;
+            }
+
+            this.careerList.innerHTML = '';
+            Object.values(PROFESSIONS).forEach(career => {
+                const card = document.createElement('div');
+                card.className = 'career-card';
+                card.style.setProperty('--card-color', career.color);
+                card.style.setProperty('--card-glow', `${career.color}44`);
+                
+                card.innerHTML = `
+                    <div class="career-icon">${career.icon}</div>
+                    <div class="career-name" style="color: ${career.color}">${career.name}</div>
+                    <div class="career-desc">${career.description}</div>
+                `;
+
+                card.onclick = () => {
+                    this.careerModal.classList.add('hidden');
+                    resolve(career.id);
+                };
+
+                this.careerList.appendChild(card);
+            });
+
+            this.careerModal.classList.remove('hidden');
+        });
     }
 
     setGameMessage(text, color) {
@@ -68,6 +105,15 @@ export class UIManager {
             const balance = p?.balance ?? 0;
             const color = p?.color || '#00f0ff';
             
+            // Career Info
+            const careerId = p?.career;
+            const career = careerId ? PROFESSIONS[careerId] : null;
+            const careerHtml = career ? `
+                <div style="font-size: 12px; color: ${career.color}; margin-top: 4px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                    <span>${career.icon}</span> <span>${career.name}</span>
+                </div>
+            ` : '<div style="font-size: 11px; color: #555; margin-top: 4px;">尚未選擇職業</div>';
+            
             playersHtml += `
             <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.5); border-left: 4px solid ${color}; border-radius: 6px; transition: transform 0.2s; ${isTurn ? `transform: scale(1.05); box-shadow: 0 0 10px ${color};` : ''}">
                 <div style="font-size: 14px; color: #ccc;">
@@ -76,7 +122,8 @@ export class UIManager {
                 <div style="font-size: 28px; font-weight: bold; color: ${color}; text-shadow: 0 0 10px ${color};">
                     $${balance}
                 </div>
-                <div style="font-size: 11px; color: #888;">Position: ${p?.position ?? 0}</div>
+                ${careerHtml}
+                <div style="font-size: 11px; color: #888; margin-top: 4px;">Position: ${p?.position ?? 0}</div>
             </div>`;
         });
 
@@ -403,5 +450,20 @@ export class UIManager {
             btnYes.onclick = () => { cleanup(); resolve(true); };
             btnNo.onclick = () => { cleanup(); resolve(false); };
         });
+    }
+
+    showVictory(winnerName, onRestart) {
+        const modal = document.getElementById('victory-modal');
+        const nameEl = document.getElementById('victory-winner-name');
+        const btn = document.getElementById('btn-victory-restart');
+        if (!modal) return;
+
+        if (nameEl) nameEl.textContent = winnerName;
+        modal.classList.remove('hidden');
+
+        btn.onclick = () => {
+            modal.classList.add('hidden');
+            if (onRestart) onRestart();
+        };
     }
 }

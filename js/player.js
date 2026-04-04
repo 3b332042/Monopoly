@@ -7,6 +7,7 @@ export class Player {
         this.position = Number(data.position || 0);
         this.isJailed = data.isJailed || false;
         this.jailTurns = Number(data.jailTurns || 0);
+        this.career = data.career || null; // New field for profession
     }
 
     // Advance position and return true if passed GO

@@ -41,6 +41,8 @@ export const TILE_DATA = [
     { id: 39, name: "信義區", type: "property", color: "blue", price: 4000 }
 ];
 
+import { PROFESSIONS } from './professions.js';
+
 export class Board {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -180,7 +182,8 @@ export class Board {
                 const currentPos = parseInt(token.dataset.currentPos);
 
                 // Update basic appearances if changed (color/balance/name)
-                token.title = `${p.name} ($${p.balance})`;
+                const career = p.career ? PROFESSIONS[p.career] : null;
+                token.title = `${p.name} ($${p.balance})${career ? ` [${career.name}]` : ''}`;
                 token.style.backgroundColor = p.color;
 
                 if (currentPos !== p.position) {
@@ -212,7 +215,8 @@ export class Board {
         token.className = 'player-token';
         token.dataset.playerId = p.id;
         token.style.backgroundColor = p.color;
-        token.title = `${p.name} ($${p.balance})`;
+        const career = p.career ? PROFESSIONS[p.career] : null;
+        token.title = `${p.name} ($${p.balance})${career ? ` [${career.name}]` : ''}`;
         token.textContent = p.name ? p.name[0].toUpperCase() : '?';
 
         // Styles are better handled in CSS, but keeping inline for now as per original
