@@ -1,4 +1,4 @@
-import { PROFESSIONS } from './professions.js';
+import { PROFESSIONS } from './professions.js?v=33';
 
 export class UIManager {
     constructor() {
@@ -32,7 +32,8 @@ export class UIManager {
                 card.innerHTML = `
                     <div class="career-icon">${career.icon}</div>
                     <div class="career-name" style="color: ${career.color}">${career.name}</div>
-                    <div class="career-desc">${career.description}</div>
+                    <div class="career-desc" style="color: #888; font-style: italic; font-size: 11px; margin-bottom: 8px;">${career.description}</div>
+                    <div class="career-skills" style="color: #00ff88; font-weight: bold; font-size: 13px; line-height: 1.4;">${career.skills}</div>
                 `;
 
                 card.onclick = () => {
@@ -481,7 +482,7 @@ export class UIManager {
             const updateUI = () => {
                 balanceEl.textContent = `$${playerBalance}`;
                 balanceEl.style.color = playerBalance < 0 ? '#ff4444' : '#00ff88';
-                
+
                 if (playerBalance >= 0) {
                     btnClose.classList.remove('hidden');
                 } else {
@@ -497,10 +498,10 @@ export class UIManager {
 
                 myProperties.forEach(prop => {
                     const sellPrice = Math.floor((prop.tile.price + (prop.level * prop.tile.price * 0.5)) * 0.9);
-                    
+
                     const item = document.createElement('div');
                     item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #333; background: rgba(255,255,255,0.03); margin-bottom:6px; border-radius:6px;";
-                    
+
                     item.innerHTML = `
                         <div style="flex:1;">
                             <div style="color:${prop.tile.color || '#0cf'}; font-weight:bold; font-size:15px;">${prop.tile.name}</div>

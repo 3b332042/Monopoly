@@ -1,9 +1,9 @@
-import { Player } from './player.js?v=18';
-import { TILE_DATA } from './board.js?v=18';
-import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=18';
-import { NetworkManager } from './network.js?v=18';
-import { UIManager } from './ui.js?v=18';
-import { PROFESSIONS } from './professions.js?v=18';
+import { Player } from './player.js?v=33';
+import { TILE_DATA } from './board.js?v=33';
+import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=33';
+import { NetworkManager } from './network.js?v=33';
+import { UIManager } from './ui.js?v=33';
+import { PROFESSIONS } from './professions.js?v=33';
 
 export class Game {
     constructor(roomId, myPlayerId, board) {
@@ -118,7 +118,7 @@ export class Game {
         const isMyTurn = amIInGame && (currentTurnPlayerId === this.myPlayerId);
         const pName = this.players[currentTurnPlayerId]?.name || 'Unknown';
         const pIdShort = currentTurnPlayerId.slice(-4);
-        const [d1, d2] = this.gameState.lastDice || [0, 0];
+        const [d1, d2] = this.gameState.lastDice || [0, 1];
         const isDoubles = (d1 === d2) && (d1 > 0);
 
         this.ui.updateRollButtonState(isMyTurn, this.isProcessingTurn, pName, pIdShort, amIInGame, isDoubles);
@@ -154,6 +154,7 @@ export class Game {
         this.updateUI(); // Disable button immediately
 
         const me = this.players[this.myPlayerId];
+        const oldPos = me.position;
         const myCareer = this.getCareer(this.myPlayerId);
         let d1, d2, steps;
 
@@ -251,12 +252,43 @@ export class Game {
         }
 
         const passedGo = me.move(steps);
-        const goBonus = passedGo ? (myCareer?.goBonus || 2000) : 0;
+        const goBonus = passedGo ? this.awardGoBonus(this.myPlayerId, oldPos, me.position) : 0;
         if (passedGo) me.balance += goBonus;
 
         let msg = `擲出了 ${d1} + ${d2} = ${steps}!`;
-        if (passedGo) msg += ` (經過起點 +$${goBonus})`;
+        if (passedGo && goBonus > 0) msg += ` (經過起點 +$${goBonus})`;
         if (d1 === d2 && myCareer?.doubleBonus) msg += ` 🎰 雙子獎勵 +$${myCareer.doubleBonus}`;
+
+        // Police "Jail Passage" Bonus
+        if (myCareer?.jailVisitBonus) {
+            let passedJail = false;
+            for (let i = 1; i <= steps; i++) {
+                if ((oldPos + i) % 40 === 10) {
+                    passedJail = true;
+                    break;
+                }
+            }
+            if (passedJail) {
+                me.balance += myCareer.jailVisitBonus;
+                msg += ` 🚓 探監巡邏 +$${myCareer.jailVisitBonus}!`;
+                await this.network.pushLog('👮', `${me.name} 執行探監巡邏，獲得津貼 $${myCareer.jailVisitBonus}。`, '#1e90ff');
+            }
+        }
+
+        // Beggar "Alms" Bonus
+        if (myCareer && myCareer.beggarMultiplier) {
+            // Get all player balances and sort ascending
+            const allBalances = Object.values(this.players).map(p => p.balance).sort((a, b) => a - b);
+            // If balance is at or below the "second to last" person's balance
+            const threshold = allBalances.length >= 2 ? allBalances[1] : allBalances[0];
+
+            if (me.balance <= threshold) {
+                const alms = steps * myCareer.beggarMultiplier;
+                me.balance += alms;
+                msg += ` 🍚 丐幫施捨 +$${alms}!`;
+                await this.network.pushLog('🍚', `${me.name} 獲得路人施捨 $${alms}！`, '#8b4513');
+            }
+        }
 
         this.ui.setGameMessage(msg, "#00ff00");
 
@@ -267,7 +299,11 @@ export class Game {
         updates[`rooms/${this.roomId}/gameState/lastDice`] = [d1, d2];
 
         await this.network.pushUpdate(updates);
-        await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！${passedGo ? '（經過起點 +$2000）' : ''}`, '#00ff88');
+        if (passedGo && goBonus > 0) {
+            await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！（經過起點 +$${goBonus}）`, '#00ff88');
+        } else {
+            await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！`, '#00ff88');
+        }
 
         // Wait for animation
         const animationDelay = (steps * 300) + 500;
@@ -299,6 +335,7 @@ export class Game {
         if (!tile) return false;
 
         const isProperty = tile.type === 'property';
+        const myCareer = this.getCareer(this.myPlayerId);
 
         if (isProperty) {
             const properties = this.gameState.properties || {};
@@ -326,7 +363,18 @@ export class Game {
                     const buildings = this.gameState.buildings || {};
                     const currentLevel = buildings[tile.id] || 0;
                     if (currentLevel < 3) {
-                        const cost = Math.floor(tile.price * 0.5);
+                        // Base costs: Lv0->1: 0.5, Lv1->2: 0.75, Lv2->3: 1.0
+                        let costMultiplier = 0.5;
+                        if (currentLevel === 1) costMultiplier = 0.75;
+                        else if (currentLevel === 2) costMultiplier = 1.0;
+
+                        let cost = Math.floor(tile.price * costMultiplier);
+
+                        // Apply Career Construction Discount
+                        if (myCareer?.buyDiscount) {
+                            cost = Math.floor(cost * (1 - myCareer.buyDiscount));
+                        }
+
                         const me = this.players[this.myPlayerId];
                         const wantsToUpgrade = await this.ui.offerUpgrade(tile, currentLevel, cost, me.balance);
                         if (wantsToUpgrade) {
@@ -350,18 +398,7 @@ export class Game {
                 return false;
             }
         } else if (tile.type === 'jail') {
-            const myCareer = this.getCareer(this.myPlayerId);
-            if (myCareer?.jailVisitBonus) {
-                const me = this.players[this.myPlayerId];
-                me.balance += myCareer.jailVisitBonus;
-                this.ui.setGameMessage(`🚓 探監巡邏：獲得津貼 $${myCareer.jailVisitBonus}！`, "#1e90ff");
-                await this.network.pushLog('👮', `${me.name} 執行探監巡邏，獲得津貼 $${myCareer.jailVisitBonus}。`, '#1e90ff');
-                await this.network.pushUpdate({
-                    [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
-                });
-            } else {
-                this.ui.setGameMessage("探監中 (純粹參觀)", "#ccc");
-            }
+            this.ui.setGameMessage("探監中 (純粹參觀)", "#ccc");
             await new Promise(r => setTimeout(r, 1000));
             return false;
         } else if (tile.type === 'utility') {
@@ -405,7 +442,7 @@ export class Game {
 
         // Traveler Discount
         let price = tile.price;
-        if (myCareer?.stationDiscount) {
+        if (myCareer?.stationDiscount !== undefined) {
             price = Math.floor(price * myCareer.stationDiscount);
         }
 
@@ -420,7 +457,7 @@ export class Game {
             me.position = targetId;
 
             // Check if passed GO (position wrapped or landed on 0)
-            const goBonus = this.awardGoBonus(oldPos, targetId);
+            const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetId);
             if (goBonus > 0) {
                 me.balance += goBonus;
                 this.ui.setGameMessage(`花費 $${price} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！(經過起點 +$${goBonus})`, "#00ffff");
@@ -436,7 +473,7 @@ export class Game {
                 [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position
             };
             await this.network.pushUpdate(updates);
-            await this.network.pushLog('🚉', `${me.name} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！支出 $${tile.price}${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ffff');
+            await this.network.pushLog('🚉', `${me.name} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！支出 $${price}${goBonus > 0 ? `（獲得起點獎金 $${goBonus}）` : ''}`, '#00ffff');
 
             // Wait for visual movement update
             await new Promise(r => setTimeout(r, 1000));
@@ -502,7 +539,7 @@ export class Game {
             case 'move': {
                 const oldPos = me.position;
                 me.move(card.value);
-                const goBonus = this.awardGoBonus(oldPos, me.position);
+                const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, me.position);
                 if (goBonus > 0) me.balance += goBonus;
                 msg = `移動 ${Math.abs(card.value)} 格${goBonus > 0 ? ` (經過起點 +$${goBonus})` : ''}`;
                 break;
@@ -510,7 +547,7 @@ export class Game {
             case 'moveto': {
                 const oldPos2 = me.position;
                 me.position = card.value;
-                const goBonus2 = this.awardGoBonus(oldPos2, card.value);
+                const goBonus2 = this.awardGoBonus(this.myPlayerId, oldPos2, card.value);
                 if (goBonus2 > 0) me.balance += goBonus2;
                 msg = `移動到指定地點${goBonus2 > 0 ? ` (經過起點 +$${goBonus2})` : ''}`;
                 break;
@@ -561,49 +598,58 @@ export class Game {
     }
 
     async payRent(tile, ownerId) {
-        const buildings = this.gameState.buildings || {};
-        const level = buildings[tile.id] || 0;
+        const me = this.players[this.myPlayerId];
+        const owner = this.players[ownerId];
+        
+        // Calculate Base Rent based on Level
+        let rent = 0;
+        const level = this.gameState.buildings[tile.id] || 0;
+        
+        if (level === 0) rent = Math.floor(tile.price * 0.1); 
+        else if (level === 1) rent = Math.floor(tile.price * 0.3);
+        else if (level === 2) rent = Math.floor(tile.price * 0.6);
+        else if (level === 3) rent = Math.floor(tile.price * 1.0);
 
-        let multiplier = 0.1;
-        if (level === 1) multiplier = 0.3;
-        else if (level === 2) multiplier = 0.6;
-        else if (level === 3) multiplier = 1.0;
+        // Double rent if owner has full set
+        const isSet = this.hasColorSet(tile.color, ownerId);
+        if (isSet) rent *= 2;
 
-        let rent = Math.floor(tile.price * multiplier);
-
-        // Color Set Bonus
-        const isColorSetComplete = this.hasColorSet(tile.color, ownerId);
-        if (isColorSetComplete) rent *= 2;
-
-        // Career Bonus (Landlord)
+        const myCareer = this.getCareer(this.myPlayerId);
         const ownerCareer = this.getCareer(ownerId);
+
+        // --- HOOLIGAN SPECIAL LOGIC (流氓特權) ---
+        if (myCareer && myCareer.id === 'HOOLIGAN') {
+            const protectionFee = Math.min(Math.floor(rent * (myCareer.protectionFeeRate || 0.7)), owner.balance);
+            if (protectionFee > 0) {
+                me.balance += protectionFee;
+                owner.balance -= protectionFee;
+                const updates = {
+                    [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
+                    [`rooms/${this.roomId}/players/${ownerId}/balance`]: owner.balance
+                };
+                await this.network.pushUpdate(updates);
+                await this.network.pushLog('🔪', `${me.name} 向 ${owner.name} 收取了 $${protectionFee} 保護費！`, '#ff4444');
+            } else {
+                await this.network.pushLog('🔪', `想收 ${owner.name} 保護費，但他口袋空空...`, '#888');
+            }
+            return;
+        }
+
+        // Apply Owner's Rent Bonus (e.g. Landlord career +40%)
         if (ownerCareer?.rentBonus) {
             rent = Math.floor(rent * (1 + ownerCareer.rentBonus));
         }
 
-        const ownerName = this.players[ownerId]?.name || "Unknown";
-
-        let msg = `踩到 ${ownerName} 的地，支付過路費 $${rent} (Lv.${level})`;
-        if (isColorSetComplete && level === 0) msg += " ✨同色加成";
-
-        this.ui.setGameMessage(msg, "red");
-
-        const me = this.players[this.myPlayerId];
-        // Only modify our own balance locally. Owner's balance update is handled
-        // by Firebase sync on the owner's client to prevent double-counting.
+        // --- REGULAR RENT LOGIC ---
         me.balance -= rent;
-
-        this.updateUI();
-
-        const updates = {};
-        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
-        // Push the owner's new balance from their current Firebase value + rent
-        // We read it from local state but it's authoritative since only one client pays at a time.
-        const owner = this.players[ownerId];
         if (owner) {
             owner.balance += rent; // local optimistic for owner's display on this client
-            updates[`rooms/${this.roomId}/players/${ownerId}/balance`] = owner.balance;
         }
+
+        const updates = {
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
+            [`rooms/${this.roomId}/players/${ownerId}/balance`]: owner.balance
+        };
 
         await this.network.pushUpdate(updates);
         await this.network.pushLog('💸', `${me.name} 向 ${this.players[ownerId]?.name || '?'} 支付過路費 $${rent}（${tile.name} Lv.${level}）`, '#ff4444');
@@ -724,7 +770,7 @@ export class Game {
         const oldPos = me.position;
         me.position = targetId;
 
-        const goBonus = this.awardGoBonus(oldPos, targetId);
+        const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetId);
         if (goBonus > 0) {
             me.balance += goBonus;
             this.ui.setGameMessage(`(Admin) 傳送至 ${targetId} 號格 (經過起點 +$${goBonus})`, "cyan");
@@ -741,14 +787,16 @@ export class Game {
         if (isBankrupt) return;
     }
 
-    awardGoBonus(oldPos, newPos) {
-        // Award $2000 if player passes or lands exactly on GO (position 0)
-        // Passing GO means: newPos < oldPos (wrapped around), or newPos === 0
-        // But NOT if it's a direct teleport to jail
-        if (newPos === 10) return 0; // Sent to jail never gives bonus
-        if (newPos === oldPos) return 0; // No movement
-        if (newPos === 0) return 2000; // Landed on GO
-        if (newPos < oldPos) return 2000; // Passed GO (wrap)
+    awardGoBonus(playerId, oldPos, newPos) {
+        // Award $2000 (default) or career-specific bonus if player passes or lands exactly on GO (position 0)
+        if (oldPos === newPos) return 0;
+
+        const myCareer = this.getCareer(playerId);
+        // If goBonus is explicitly 0 (like for Tycoon), return 0. Otherwise default to 2000.
+        const bonusAmount = (myCareer?.goBonus !== undefined) ? myCareer.goBonus : 2000;
+
+        if (newPos === 0) return bonusAmount; // Landed on GO
+        if (newPos < oldPos) return bonusAmount; // Passed GO (wrap)
         return 0;
     }
 
@@ -835,11 +883,11 @@ export class Game {
 
             if (myProperties.length > 0) {
                 const action = await this.ui.showLiquidation(
-                    player.balance, 
-                    myProperties, 
+                    player.balance,
+                    myProperties,
                     (tid, val) => this.liquidateProperty(tid, val)
                 );
-                
+
                 if (action === 'continue') {
                     return false; // Successful liquidation
                 }
@@ -859,18 +907,18 @@ export class Game {
     async liquidateProperty(tileId, sellValue) {
         const me = this.players[this.myPlayerId];
         me.balance += sellValue;
-        
+
         const updates = {
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
             [`rooms/${this.roomId}/gameState/properties/${tileId}`]: null,
             [`rooms/${this.roomId}/gameState/buildings/${tileId}`]: null
         };
-        
+
         await this.network.pushUpdate(updates);
-        
+
         const tile = TILE_DATA.find(t => t.id === tileId);
         await this.network.pushLog('🧹', `${me.name} 以 $${sellValue} 變賣了 ${tile?.name || '地產'} 用於清償。`, '#aaaaaa');
-        
+
         this.updateUI();
         return true;
     }

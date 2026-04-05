@@ -1,4 +1,5 @@
-import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=17';
+import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=33';
+import { PROFESSIONS } from './professions.js?v=33';
 
 // DOM Elements
 const lobbyScreen = document.getElementById('lobby-screen');
@@ -225,8 +226,8 @@ function startGameRequest() {
     });
 }
 
-import { Board } from './board.js?v=17';
-import { Game } from './game.js?v=17';
+import { Board } from './board.js?v=32';
+import { Game } from './game.js?v=32';
 
 let gameBoard = null;
 let gameInstance = null;
@@ -259,17 +260,18 @@ function startGame() {
                 console.log("No career found, showing selection modal...");
                 const careerId = await gameInstance.ui.showCareerSelection();
                 console.log("Career selected:", careerId);
-                
+
                 const updates = {};
                 updates[`rooms/${currentRoomId}/players/${currentPlayerId}/career`] = careerId;
-                
-                // Entrepreneur Bonus
-                if (careerId === 'ENTREPRENEUR') {
-                    updates[`rooms/${currentRoomId}/players/${currentPlayerId}/balance`] = me.balance + 5000;
+
+                // Apply Initial Bonus/Penalty from Career
+                const selectedCareer = PROFESSIONS[careerId];
+                if (selectedCareer && selectedCareer.bonusInitial) {
+                    updates[`rooms/${currentRoomId}/players/${currentPlayerId}/balance`] = me.balance + selectedCareer.bonusInitial;
                 }
-                
+
                 await gameInstance.network.pushUpdate(updates);
-                await gameInstance.network.pushLog('👔', `${me.name} 選擇了職業：${gameInstance.getCareer(currentPlayerId).name}`, '#fff');
+                await gameInstance.network.pushLog(selectedCareer?.icon || '🎭', `${me.name} 選擇了職業：${selectedCareer?.name || '未知'}`, '#fff');
             }
         };
 

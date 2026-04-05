@@ -41,7 +41,7 @@ export const TILE_DATA = [
     { id: 39, name: "信義區", type: "property", color: "blue", price: 4000 }
 ];
 
-import { PROFESSIONS } from './professions.js';
+import { PROFESSIONS } from './professions.js?v=33';
 
 export class Board {
     constructor(containerId) {
@@ -299,9 +299,9 @@ export class Board {
 
         // Helper to determine if owner has full color set
         const hasColorSet = (color, ownerId) => {
-             if (!color) return false;
-             const colorTiles = TILE_DATA.filter(t => t.color === color);
-             return colorTiles.every(t => properties[t.id] === ownerId);
+            if (!color) return false;
+            const colorTiles = TILE_DATA.filter(t => t.color === color);
+            return colorTiles.every(t => properties[t.id] === ownerId);
         };
 
         Object.keys(properties).forEach(tileId => {
@@ -316,7 +316,7 @@ export class Board {
                 if (level === 1) multiplier = 0.3;
                 else if (level === 2) multiplier = 0.6;
                 else if (level === 3) multiplier = 1.0;
-                
+
                 let rent = Math.floor(tileData.price * multiplier);
                 const isSet = hasColorSet(tileData.color, ownerId);
                 if (isSet) rent *= 2;
