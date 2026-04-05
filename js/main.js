@@ -360,6 +360,31 @@ function startGame() {
             if (gameInstance) gameInstance.forceNextTurn();
         });
     }
+
+    const btnBankrupt = document.getElementById('btn-admin-bankrupt');
+    if (btnBankrupt) {
+        btnBankrupt.onclick = () => {
+            if (confirm("確定要在測試中直接破產嗎？")) gameInstance.adminSelfBankrupt();
+        };
+    }
+    const btnAcquireAll = document.getElementById('btn-admin-acquire-all');
+    if (btnAcquireAll) {
+        btnAcquireAll.onclick = () => {
+            gameInstance.adminAcquireAll();
+        };
+    }
+    const btnResetProps = document.getElementById('btn-admin-reset-props');
+    if (btnResetProps) {
+        btnResetProps.onclick = () => {
+            if (confirm("要清空地圖上所有地產權屬嗎？")) gameInstance.adminResetProperties();
+        };
+    }
+    const btnRich = document.getElementById('btn-admin-rich');
+    if (btnRich) {
+        btnRich.onclick = () => {
+            gameInstance.adminAddMoney(50000);
+        };
+    }
     // ------------------------------
 
     // Bind Roll Button from Board UI

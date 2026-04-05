@@ -6,7 +6,7 @@ export class UIManager {
         this.rollBtn = document.getElementById('roll-btn');
         this.diceRes = document.getElementById('dice-result');
         this.debugOverlay = document.getElementById('debug-overlay');
-        
+
         // Modals
         this.actionModal = document.getElementById('action-modal');
         this.cardModal = document.getElementById('card-modal');
@@ -28,7 +28,7 @@ export class UIManager {
                 card.className = 'career-card';
                 card.style.setProperty('--card-color', career.color);
                 card.style.setProperty('--card-glow', `${career.color}44`);
-                
+
                 card.innerHTML = `
                     <div class="career-icon">${career.icon}</div>
                     <div class="career-name" style="color: ${career.color}">${career.name}</div>
@@ -95,16 +95,16 @@ export class UIManager {
         if (!this.debugOverlay) return;
 
         let playersHtml = "";
-        
+
         (playerOrder || []).forEach((pid, idx) => {
             const p = players[pid];
             const isTurn = pid === currentTurnPlayerId;
             const isMe = pid === myPlayerId;
-            
+
             const name = p?.name || `Player ${idx + 1}`;
             const balance = p?.balance ?? 0;
             const color = p?.color || '#00f0ff';
-            
+
             // Career Info
             const careerId = p?.career;
             const career = careerId ? PROFESSIONS[careerId] : null;
@@ -113,7 +113,7 @@ export class UIManager {
                     <span>${career.icon}</span> <span>${career.name}</span>
                 </div>
             ` : '<div style="font-size: 11px; color: #555; margin-top: 4px;">尚未選擇職業</div>';
-            
+
             playersHtml += `
             <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.5); border-left: 4px solid ${color}; border-radius: 6px; transition: transform 0.2s; ${isTurn ? `transform: scale(1.05); box-shadow: 0 0 10px ${color};` : ''}">
                 <div style="font-size: 14px; color: #ccc;">
@@ -350,14 +350,14 @@ export class UIManager {
                 return;
             }
 
-            titleEl.textContent = `🌟 升級 ${tile.name} (Lv.${currentLevel} ➔ Lv.${currentLevel+1})`;
-            
+            titleEl.textContent = `🌟 升級 ${tile.name} (Lv.${currentLevel} ➔ Lv.${currentLevel + 1})`;
+
             let percentage = "0%";
             if (currentLevel === 0) percentage = "30%";
             else if (currentLevel === 1) percentage = "60%";
             else if (currentLevel === 2) percentage = "100%";
 
-            descEl.textContent = `要花費 $${cost} 將此地升級為 Lv.${currentLevel+1} 嗎？\n升級後過路費將提升至房價的 ${percentage}！`;
+            descEl.textContent = `要花費 $${cost} 將此地升級為 Lv.${currentLevel + 1} 嗎？\n升級後過路費將提升至房價的 ${percentage}！`;
 
             if (playerBalance < cost) {
                 btnYes.disabled = true;
@@ -465,5 +465,90 @@ export class UIManager {
             modal.classList.add('hidden');
             if (onRestart) onRestart();
         };
+    }
+
+    showLiquidation(playerBalance, myProperties, onSell) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('liquidation-modal');
+            const balanceEl = document.getElementById('liq-balance');
+            const listEl = document.getElementById('liq-property-list');
+            const countEl = document.getElementById('liq-property-count');
+            const btnClose = document.getElementById('btn-liq-close');
+            const btnBankrupt = document.getElementById('btn-liq-bankrupt');
+
+            if (!modal) { resolve('bankrupt'); return; }
+
+            const updateUI = () => {
+                balanceEl.textContent = `$${playerBalance}`;
+                balanceEl.style.color = playerBalance < 0 ? '#ff4444' : '#00ff88';
+                
+                if (playerBalance >= 0) {
+                    btnClose.classList.remove('hidden');
+                } else {
+                    btnClose.classList.add('hidden');
+                }
+
+                listEl.innerHTML = '';
+                countEl.textContent = `持有 ${myProperties.length} 處資產`;
+
+                if (myProperties.length === 0 && playerBalance < 0) {
+                    listEl.innerHTML = '<div style="text-align:center; padding:30px; color:#666; font-style:italic;">你已沒有資產可以變賣...</div>';
+                }
+
+                myProperties.forEach(prop => {
+                    const sellPrice = Math.floor((prop.tile.price + (prop.level * prop.tile.price * 0.5)) * 0.9);
+                    
+                    const item = document.createElement('div');
+                    item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #333; background: rgba(255,255,255,0.03); margin-bottom:6px; border-radius:6px;";
+                    
+                    item.innerHTML = `
+                        <div style="flex:1;">
+                            <div style="color:${prop.tile.color || '#0cf'}; font-weight:bold; font-size:15px;">${prop.tile.name}</div>
+                            <div style="font-size:11px; color:#888; margin-top:2px;">
+                                ${prop.tile.type === 'property' ? `Lv.${prop.level}` : '特殊地塊'} | 回收價 $${sellPrice}
+                            </div>
+                        </div>
+                        <button class="btn" style="background:rgba(255,68,68,0.1); border:1px solid #ff4444; color:#ff4444; padding:6px 12px; font-size:13px; margin:0; min-width:90px; border-radius:4px;">
+                            變賣
+                        </button>
+                    `;
+
+                    const btnSell = item.querySelector('button');
+                    btnSell.onclick = async () => {
+                        btnSell.disabled = true;
+                        btnSell.textContent = "...";
+                        const success = await onSell(prop.tile.id, sellPrice);
+                        if (success) {
+                            playerBalance += sellPrice;
+                            myProperties = myProperties.filter(p => p.tile.id !== prop.tile.id);
+                            updateUI();
+                        } else {
+                            btnSell.disabled = false;
+                            btnSell.textContent = "變賣";
+                        }
+                    };
+                    listEl.appendChild(item);
+                });
+            };
+
+            updateUI();
+            modal.classList.remove('hidden');
+
+            btnClose.onclick = () => {
+                if (playerBalance < 0) {
+                    alert("請先變賣地產以清償債務！");
+                    return;
+                }
+                modal.classList.add('hidden');
+                resolve('continue');
+            };
+
+            btnBankrupt.onclick = () => {
+                if (confirm("確定要宣告破產嗎？剩餘資產將全數沒收。")) {
+                    modal.classList.add('hidden');
+                    resolve('bankrupt');
+                }
+            };
+        });
     }
 }

@@ -15,6 +15,10 @@
     display: none;
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* Typography & Titles */
 .neon-title {
     font-size: 3rem;
