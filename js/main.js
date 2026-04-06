@@ -69,11 +69,11 @@ async function createRoom() {
     const name = nameInput.value || "Player 1";
     const roomId = generateRoomCode();
 
-    // Use existing ID or create new
-    let savedId = localStorage.getItem('monopoly_playerId');
+    // Use existing ID or create new (Session storage for tab isolation)
+    let savedId = sessionStorage.getItem('monopoly_playerId');
     if (!savedId) {
-        savedId = "p_" + Date.now();
-        localStorage.setItem('monopoly_playerId', savedId);
+        savedId = "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+        sessionStorage.setItem('monopoly_playerId', savedId);
     }
     currentPlayerId = savedId;
 
@@ -131,10 +131,10 @@ async function joinRoom() {
         }
 
         // Use existing ID or create new
-        let savedId = localStorage.getItem('monopoly_playerId');
+        let savedId = sessionStorage.getItem('monopoly_playerId');
         if (!savedId) {
-            savedId = "p_" + Date.now();
-            localStorage.setItem('monopoly_playerId', savedId);
+            savedId = "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+            sessionStorage.setItem('monopoly_playerId', savedId);
         }
         currentPlayerId = savedId;
 
@@ -226,8 +226,8 @@ function startGameRequest() {
     });
 }
 
-import { Board } from './board.js?v=32';
-import { Game } from './game.js?v=32';
+import { Board } from './board.js?v=46';
+import { Game } from './game.js?v=46';
 
 let gameBoard = null;
 let gameInstance = null;

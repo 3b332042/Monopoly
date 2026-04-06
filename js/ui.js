@@ -185,6 +185,8 @@ export class UIManager {
         });
     }
 
+
+
     async drawCard(card, isChance) {
         const display = this.cardModal.querySelector('.card-display');
         const front = this.cardModal.querySelector('.card-front');

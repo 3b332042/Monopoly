@@ -1,9 +1,11 @@
-import { Player } from './player.js?v=33';
-import { TILE_DATA } from './board.js?v=33';
-import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=33';
-import { NetworkManager } from './network.js?v=33';
-import { UIManager } from './ui.js?v=33';
-import { PROFESSIONS } from './professions.js?v=33';
+import { Player } from './player.js?v=46';
+import { TILE_DATA } from './board.js?v=46';
+import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=46';
+console.log('--- game.js v46 Loading ---');
+import { NetworkManager } from './network.js?v=46';
+import { UIManager } from './ui.js?v=46';
+import { PROFESSIONS } from './professions.js?v=46';
+
 
 export class Game {
     constructor(roomId, myPlayerId, board) {
@@ -23,9 +25,14 @@ export class Game {
 
         this.ui = new UIManager();
         this.network = new NetworkManager(roomId);
+        
+
 
         this.initListeners();
+
     }
+
+
 
     initListeners() {
         this.network.listenToGameState(
@@ -37,6 +44,7 @@ export class Game {
         );
         this.network.listenToAuction((data) => this.handleAuctionUpdate(data));
         this.network.listenToLog((entry) => this.showToast(entry.emoji, entry.message, entry.color));
+
     }
 
     showToast(emoji, message, color = '#ffffff') {
@@ -312,6 +320,8 @@ export class Game {
         // 2. Interaction
         const isBankrupt = await this.checkTileInteraction(me.position);
         if (isBankrupt) return;
+
+
 
         // 3. Next Turn Logic
         const endTurnUpdates = {};
@@ -601,9 +611,12 @@ export class Game {
         const me = this.players[this.myPlayerId];
         const owner = this.players[ownerId];
         
+        const properties = this.gameState.properties || {};
+        const buildings = this.gameState.buildings || {};
+
         // Calculate Base Rent based on Level
         let rent = 0;
-        const level = this.gameState.buildings[tile.id] || 0;
+        const level = buildings[tile.id] || 0;
         
         if (level === 0) rent = Math.floor(tile.price * 0.1); 
         else if (level === 1) rent = Math.floor(tile.price * 0.3);
@@ -619,6 +632,12 @@ export class Game {
 
         // --- HOOLIGAN SPECIAL LOGIC (流氓特權) ---
         if (myCareer && myCareer.id === 'HOOLIGAN') {
+            if (!owner) {
+                this.ui.setGameMessage(`這地產目前沒人管，收不到保護費...`, "#888");
+                await new Promise(r => setTimeout(r, 1000));
+                return false;
+            }
+
             const protectionFee = Math.min(Math.floor(rent * (myCareer.protectionFeeRate || 0.7)), owner.balance);
             if (protectionFee > 0) {
                 me.balance += protectionFee;
@@ -627,12 +646,19 @@ export class Game {
                     [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
                     [`rooms/${this.roomId}/players/${ownerId}/balance`]: owner.balance
                 };
+                this.ui.setGameMessage(`🔪 向 ${owner.name} 收取了 $${protectionFee} 保護費！`, "#ff4444");
+                this.updateUI();
                 await this.network.pushUpdate(updates);
                 await this.network.pushLog('🔪', `${me.name} 向 ${owner.name} 收取了 $${protectionFee} 保護費！`, '#ff4444');
             } else {
+                this.ui.setGameMessage(`想向 ${owner.name} 收保護費，但他口袋空空...`, "#888");
                 await this.network.pushLog('🔪', `想收 ${owner.name} 保護費，但他口袋空空...`, '#888');
             }
-            return;
+            
+            await new Promise(r => setTimeout(r, 1500));
+            // Check if the owner went bankrupt from the protection fee
+            await this.checkBankruptcy(ownerId, this.myPlayerId);
+            return false;
         }
 
         // Apply Owner's Rent Bonus (e.g. Landlord career +40%)
@@ -766,25 +792,32 @@ export class Game {
     }
 
     async adminTeleport(targetId) {
+        const targetPos = Number(targetId);
+        console.log(`[Admin] Starting teleport to ${targetPos}`);
+        
         const me = this.players[this.myPlayerId];
-        const oldPos = me.position;
-        me.position = targetId;
+        const oldPos = Number(me.position);
+        me.position = targetPos; 
 
-        const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetId);
+        console.log(`[Admin] Calc Go Bonus: ${oldPos} -> ${targetPos}`);
+        const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetPos);
         if (goBonus > 0) {
             me.balance += goBonus;
-            this.ui.setGameMessage(`(Admin) 傳送至 ${targetId} 號格 (經過起點 +$${goBonus})`, "cyan");
+            this.ui.setGameMessage(`(Admin) 傳送至 ${targetPos} 號格 (經過起點 +$${goBonus})`, "cyan");
         }
 
+        console.log(`[Admin] Updating network state...`);
         this.updateUI();
         await this.network.pushUpdate({
             [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position,
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
         });
-        await this.network.pushLog('🛠️', `管理員將 ${me.name} 傳送至 ${targetId} 號格 ${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ccff');
+        
+        await this.network.pushLog('🛠️', `管理員將 ${me.name} 傳送至 ${targetPos} 號格 ${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ccff');
+        
+        console.log(`[Admin] Interaction check...`);
         await new Promise(r => setTimeout(r, 1000));
-        const isBankrupt = await this.checkTileInteraction(me.position);
-        if (isBankrupt) return;
+        await this.checkTileInteraction(me.position);
     }
 
     awardGoBonus(playerId, oldPos, newPos) {
@@ -1227,4 +1260,6 @@ export class Game {
 
         btn.onclick = () => { modal.classList.add('hidden'); };
     }
+
+
 }
