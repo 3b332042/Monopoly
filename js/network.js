@@ -1,4 +1,4 @@
-import { db, ref, update, onValue, set, get, push, onChildAdded } from './firebase.js?v=17';
+import { db, ref, update, onValue, set, get, push, onChildAdded } from './firebase.js?v=47';
 
 export class NetworkManager {
     constructor(roomId) {

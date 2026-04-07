@@ -15,8 +15,8 @@ export const PROFESSIONS = {
         icon: '🏠',
         color: '#ff66b2',
         description: '坐擁多處精華地段的資深大地主。',
-        skills: '過路費收入 +40%',
-        rentBonus: 0.4,
+        skills: '過路費收入 +30%',
+        rentBonus: 0.3,
     },
     TRAVELER: {
         id: 'TRAVELER',
@@ -34,8 +34,8 @@ export const PROFESSIONS = {
         icon: '🎰',
         color: '#ff4500',
         description: '在概率與命運中穿梭的冒險者。',
-        skills: '雙子獎勵 $1,500，保釋金 $1,000',
-        doubleBonus: 1500,
+        skills: '雙子獎勵 $3,000，保釋金 $1,000',
+        doubleBonus: 3000,
         bailCost: 1000,
     },
     POLICE: {
@@ -54,8 +54,8 @@ export const PROFESSIONS = {
         icon: '🍚',
         color: '#8b4513',
         description: '歷經滄桑的流浪者，看透世間人情。',
-        skills: '初始資金$100，買地與建築 7 折，若資產為最後一名，則每次擲骰獲得點數 x 85資金',
-        bonusInitial: -14900,
+        skills: '初始資金 $1,500，買地與建築 7 折，若資產為最後一名，則每次擲骰獲得點數 x 85資金',
+        bonusInitial: -13500,
         beggarMultiplier: 85,
         buyDiscount: 0.3
     },
@@ -83,10 +83,10 @@ export const PROFESSIONS = {
         icon: '🔫',
         color: '#ff4444',
         description: '橫行霸道的街頭霸主，沒人敢收他的過路費。',
-        skills: '起點獲 $1,000，路過地反收 70% 保護費，保釋 $2,500',
+        skills: '起點獲 $1,000，路過地反收 40% 保護費 (上限 $5,000)，保釋 $2,500',
         goBonus: 1000,
         bailCost: 2500,
         isHooligan: true,
-        protectionFeeRate: 0.7
+        protectionFeeRate: 0.4
     }
 };

@@ -1,47 +1,48 @@
 export const TILE_DATA = [
     { id: 0, name: "起點", type: "go", color: null, price: 0 },
-    { id: 1, name: "基隆", type: "property", color: "brown", price: 600 },
+    { id: 1, name: "基隆市", type: "property", color: "brown", price: 600 },
     { id: 2, name: "命運", type: "chance", color: null, price: 0 },
-    { id: 3, name: "桃園", type: "property", color: "brown", price: 600 },
+    { id: 3, name: "連江縣", type: "property", color: "brown", price: 600 },
     { id: 4, name: "所得稅", type: "tax", color: null, price: 2000 },
     { id: 5, name: "台北車站", type: "station", color: null, price: 800 },
-    { id: 6, name: "宜蘭", type: "property", color: "lightblue", price: 1000 },
+    { id: 6, name: "宜蘭縣", type: "property", color: "lightblue", price: 1000 },
     { id: 7, name: "機會", type: "chest", color: null, price: 0 },
-    { id: 8, name: "花蓮", type: "property", color: "lightblue", price: 1000 },
-    { id: 9, name: "台東", type: "property", color: "lightblue", price: 1200 },
+    { id: 8, name: "花蓮縣", type: "property", color: "lightblue", price: 1000 },
+    { id: 9, name: "台東縣", type: "property", color: "lightblue", price: 1200 },
     { id: 10, name: "探監/坐牢", type: "jail", color: null, price: 0 },
-    { id: 11, name: "苗栗", type: "property", color: "pink", price: 1400 },
-    { id: 12, name: "台電", type: "utility", color: null, price: 5000 },
-    { id: 13, name: "南投", type: "property", color: "pink", price: 1400 },
-    { id: 14, name: "雲林", type: "property", color: "pink", price: 1600 },
+    { id: 11, name: "苗栗縣", type: "property", color: "pink", price: 1400 },
+    { id: 12, name: "台電", type: "utility", color: null, price: 3000 },
+    { id: 13, name: "南投縣", type: "property", color: "pink", price: 1400 },
+    { id: 14, name: "雲林縣", type: "property", color: "pink", price: 1600 },
     { id: 15, name: "新竹車站", type: "station", color: null, price: 800 },
-    { id: 16, name: "嘉義", type: "property", color: "orange", price: 1800 },
+    { id: 16, name: "屏東縣", type: "property", color: "orange", price: 1800 },
     { id: 17, name: "命運", type: "chest", color: null, price: 0 },
-    { id: 18, name: "台南", type: "property", color: "orange", price: 1800 },
-    { id: 19, name: "屏東", type: "property", color: "orange", price: 2000 },
+    { id: 18, name: "澎湖縣", type: "property", color: "orange", price: 1800 },
+    { id: 19, name: "金門縣", type: "property", color: "orange", price: 2000 },
     { id: 20, name: "免費停車", type: "parking", color: null, price: 0 },
-    { id: 21, name: "彰化", type: "property", color: "red", price: 2200 },
+    { id: 21, name: "嘉義縣", type: "property", color: "red", price: 2200 },
     { id: 22, name: "機會", type: "chance", color: null, price: 0 },
-    { id: 23, name: "台中", type: "property", color: "red", price: 2200 },
-    { id: 24, name: "嘉義", type: "property", color: "red", price: 2400 },
+    { id: 23, name: "嘉義市", type: "property", color: "red", price: 2200 },
+    { id: 24, name: "彰化縣", type: "property", color: "red", price: 2400 },
     { id: 25, name: "台中車站", type: "station", color: null, price: 800 },
-    { id: 26, name: "綠島", type: "property", color: "yellow", price: 2600 },
-    { id: 27, name: "澎湖", type: "property", color: "yellow", price: 2600 },
-    { id: 28, name: "自來水", type: "utility", color: null, price: 5000 },
-    { id: 29, name: "金門", type: "property", color: "yellow", price: 2800 },
+    { id: 26, name: "新竹縣", type: "property", color: "yellow", price: 2600 },
+    { id: 27, name: "新竹市", type: "property", color: "yellow", price: 2600 },
+    { id: 28, name: "自來水", type: "utility", color: null, price: 3000 },
+    { id: 29, name: "桃園市", type: "property", color: "yellow", price: 2800 },
     { id: 30, name: "去坐牢", type: "gotojail", color: null, price: 0 },
-    { id: 31, name: "高雄", type: "property", color: "green", price: 3000 },
-    { id: 32, name: "高雄", type: "property", color: "green", price: 3000 },
+    { id: 31, name: "台南市", type: "property", color: "green", price: 3000 },
+    { id: 32, name: "高雄市", type: "property", color: "green", price: 3000 },
     { id: 33, name: "命運", type: "chest", color: null, price: 0 },
-    { id: 34, name: "高雄", type: "property", color: "green", price: 3200 },
+    { id: 34, name: "台中市", type: "property", color: "green", price: 3200 },
     { id: 35, name: "高雄車站", type: "station", color: null, price: 800 },
     { id: 36, name: "機會", type: "chance", color: null, price: 0 },
-    { id: 37, name: "台北", type: "property", color: "blue", price: 3500 },
+    { id: 37, name: "新北市", type: "property", color: "blue", price: 3500 },
     { id: 38, name: "奢侈稅", type: "tax", color: null, price: 1000 },
-    { id: 39, name: "信義區", type: "property", color: "blue", price: 4000 }
+    { id: 39, name: "台北市", type: "property", color: "blue", price: 4000 }
 ];
 
-import { PROFESSIONS } from './professions.js?v=33';
+import { PROFESSIONS } from './professions.js?v=47';
+import { Economy } from './economy.js?v=47';
 
 export class Board {
     constructor(containerId) {
@@ -312,19 +313,19 @@ export class Board {
 
             if (tileEl && owner && tileData) {
                 const level = buildings[tileId] || 0;
-                let multiplier = 0.2;
-                if (level === 1) multiplier = 0.5;
-                else if (level === 2) multiplier = 1.5;
-                else if (level === 3) multiplier = 4.0;
-
-                let rent = Math.floor(tileData.price * multiplier);
                 const isSet = hasColorSet(tileData.color, ownerId);
-                if (isSet) rent *= 2;
-
-                const starStr = "★".repeat(level);
+                const ownerCareer = owner.career ? PROFESSIONS[owner.career] : null;
+                
+                let rentDisplay = "";
+                if (tileData.type === 'property') {
+                    const rent = Economy.getPropertyRent(tileData.price, level, isSet, ownerCareer);
+                    rentDisplay = `過路費: $${rent}`;
+                } else {
+                    rentDisplay = `過路費: ${Economy.getRentDescription(tileData)}`;
+                }
 
                 // Set Data for Tooltip
-                let tooltipText = `擁有者: ${owner.name}\n過路費: $${rent}`;
+                let tooltipText = `擁有者: ${owner.name}\n${rentDisplay}`;
                 if (level > 0) tooltipText += ` (Lv.${level})`;
                 if (isSet && level === 0) tooltipText += `\n✨同色加倍✨`;
                 tileEl.dataset.tooltip = tooltipText;
@@ -340,13 +341,13 @@ export class Board {
                     const stars = document.createElement('div');
                     stars.className = 'level-stars';
                     stars.style.position = 'absolute';
-                    stars.style.top = '25px'; // Below name
+                    stars.style.top = '25px';
                     stars.style.width = '100%';
                     stars.style.textAlign = 'center';
                     stars.style.color = '#ffaa00';
                     stars.style.fontSize = '12px';
                     stars.style.textShadow = '0 0 5px #ffaa00';
-                    stars.textContent = starStr;
+                    stars.textContent = '★'.repeat(level);
                     stars.style.zIndex = '5';
                     tileEl.appendChild(stars);
                 }

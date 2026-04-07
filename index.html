@@ -359,6 +359,17 @@
                 </div>
             </div>
 
+            <!-- TARGET SELECTION MODAL -->
+            <div id="target-modal" class="modal-overlay hidden" style="z-index: 3500;">
+                <div class="modal-content neon-box" style="width: 90%; max-width: 600px; border-color: #ff0055; background: rgba(20, 5, 10, 0.98);">
+                    <h2 id="target-title" style="color: #ff0055; margin-bottom: 15px;">💣 選擇一個對手進行攻擊</h2>
+                    <p id="target-desc" style="color: #ccc; margin-bottom: 20px; font-size: 14px;">點擊你要針對的玩家頭像或名稱...</p>
+                    <div id="target-list" style="display: grid; grid-template-columns: 1fr; gap: 10px; max-height: 50vh; overflow-y: auto;">
+                        <!-- Targets will be injected here -->
+                    </div>
+                </div>
+            </div>
+
         <!-- ADMIN CONSOLE (Bottom Left) -->
         <div id="admin-console"
             style="display: block; position: absolute; bottom: 10px; left: 10px; background: rgba(30,10,50,0.95); color: #0cf; padding: 15px; border: 2px solid #0cf; border-radius: 8px; z-index: 1000; font-size: 14px; box-shadow: 0 0 15px #0cf; width: 220px;">
@@ -412,12 +423,19 @@
                     style="background:#f1c40f; color:#000; border:none; padding:6px; cursor:pointer; font-size:12px; border-radius:4px;">💰
                     財富自由</button>
             </div>
+
+            <div style="margin-top: 12px; border-top: 1px solid #0cf3; padding-top: 10px;">
+                <select id="admin-card-select" style="width: 100%; background: #000; color: #fff; border: 1px solid #0cf; padding: 4px; margin-bottom: 5px; font-size: 11px;">
+                    <!-- Options will be populated by main.js -->
+                </select>
+                <button id="btn-admin-card" style="width: 100%; background: #0cf; color: #000; border: none; padding: 6px; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 4px;">🃏 觸發指定卡片</button>
+            </div>
         </div>
 
     </div>
 
     <!-- Type module allows us to use import/export -->
-    <script type="module" src="js/main.js?v=33"></script>
+    <script type="module" src="js/main.js?v=47"></script>
 </body>
 
 </html>

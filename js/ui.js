@@ -1,4 +1,5 @@
-import { PROFESSIONS } from './professions.js?v=33';
+import { PROFESSIONS } from './professions.js?v=47';
+import { Economy } from './economy.js?v=47';
 
 export class UIManager {
     constructor() {
@@ -12,6 +13,10 @@ export class UIManager {
         this.cardModal = document.getElementById('card-modal');
         this.careerModal = document.getElementById('career-modal');
         this.careerList = document.getElementById('career-list');
+
+        this.targetModal = document.getElementById('target-modal');
+        this.targetList = document.getElementById('target-list');
+        this.targetTitle = document.getElementById('target-title');
     }
 
     showCareerSelection() {
@@ -45,6 +50,52 @@ export class UIManager {
             });
 
             this.careerModal.classList.remove('hidden');
+        });
+    }
+
+    showTargetSelection(opponents, title, canSelectFunc = (p) => true) {
+        return new Promise((resolve) => {
+            if (!this.targetModal || !this.targetList) {
+                console.error("Target modal elements not found");
+                resolve(opponents[0]?.id || null);
+                return;
+            }
+
+            this.targetTitle.textContent = title;
+            this.targetList.innerHTML = '';
+
+            opponents.forEach(p => {
+                const isSelectable = canSelectFunc(p);
+                const card = document.createElement('div');
+                card.className = `target-card ${isSelectable ? '' : 'disabled'}`;
+                
+                const career = PROFESSIONS[p.careerId] || { icon: '👤', name: '玩家' };
+                
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="font-size:24px;">${career.icon}</span>
+                        <div>
+                            <div class="target-name">${p.name}</div>
+                            <div style="font-size:11px; color:#888;">${career.name}</div>
+                        </div>
+                    </div>
+                    <div class="target-info">
+                        <div style="color:#00ff88;">$${p.balance}</div>
+                        <div style="font-size:10px;">${p.isJailed ? '⛓️ 坐牢中' : '📍 在場上'}</div>
+                    </div>
+                `;
+
+                if (isSelectable) {
+                    card.onclick = () => {
+                        this.targetModal.classList.add('hidden');
+                        resolve(p.id);
+                    };
+                }
+
+                this.targetList.appendChild(card);
+            });
+
+            this.targetModal.classList.remove('hidden');
         });
     }
 
@@ -158,7 +209,9 @@ export class UIManager {
             title.textContent = tile.name;
             title.style.color = tile.color || '#fff';
             price.textContent = `$${tile.price}`;
-            desc.textContent = "這塊地目前無人擁有，要購買嗎？";
+            
+            let rentFormula = Economy.getRentDescription(tile);
+            desc.textContent = `這塊地目前無人擁有，要購買嗎？\n(過路費預估: ${rentFormula})`;
 
             this.actionModal.classList.remove('hidden');
 
@@ -355,10 +408,7 @@ export class UIManager {
 
             titleEl.textContent = `🌟 升級 ${tile.name} (Lv.${currentLevel} ➔ Lv.${currentLevel + 1})`;
 
-            let percentage = "0%";
-            if (currentLevel === 0) percentage = "50%";
-            else if (currentLevel === 1) percentage = "150%";
-            else if (currentLevel === 2) percentage = "400%";
+            const percentage = Economy.getRentPercentageString(currentLevel);
 
             descEl.textContent = `要花費 $${cost} 將此地升級為 Lv.${currentLevel + 1} 嗎？\n升級後過路費將提升至房價的 ${percentage}！`;
 
@@ -429,7 +479,7 @@ export class UIManager {
 
             titleEl.textContent = `🏢 收購 ${tile.name}`;
             descEl.textContent = `要從 ${ownerName} 手中強制收購 "${tile.name}" (Lv.${level}) 嗎？`;
-            priceDescEl.textContent = `土地 $${tile.price} + 建築投資 $${Math.floor(tile.price * 0.5 * level)} = 共 $${Math.floor((tile.price + tile.price * 0.5 * level))} × 1.2 = 收購金 $${acquisitionPrice}`;
+            priceDescEl.textContent = `收購金計算：(土地 $${tile.price} + 建築投資 $${Math.floor(tile.price * 0.5 * level)}) × 1.2 = $${acquisitionPrice}`;
 
             if (playerBalance < acquisitionPrice) {
                 btnYes.disabled = true;
@@ -499,7 +549,7 @@ export class UIManager {
                 }
 
                 myProperties.forEach(prop => {
-                    const sellPrice = Math.floor((prop.tile.price + (prop.level * prop.tile.price * 0.5)) * 0.9);
+                    const sellPrice = Economy.getLiquidationValue(prop.tile.price, prop.level);
 
                     const item = document.createElement('div');
                     item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #333; background: rgba(255,255,255,0.03); margin-bottom:6px; border-radius:6px;";

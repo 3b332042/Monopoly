@@ -1,10 +1,11 @@
-import { Player } from './player.js?v=46';
-import { TILE_DATA } from './board.js?v=46';
-import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=46';
-console.log('--- game.js v46 Loading ---');
-import { NetworkManager } from './network.js?v=46';
-import { UIManager } from './ui.js?v=46';
-import { PROFESSIONS } from './professions.js?v=46';
+import { Player } from './player.js?v=47';
+import { TILE_DATA } from './board.js?v=47';
+import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=47';
+console.log('--- game.js v47 Loading ---');
+import { NetworkManager } from './network.js?v=47';
+import { UIManager } from './ui.js?v=47';
+import { PROFESSIONS } from './professions.js?v=47';
+import { Economy } from './economy.js?v=47';
 
 
 export class Game {
@@ -24,15 +25,8 @@ export class Game {
         this.gameEnded = false;
 
         this.ui = new UIManager();
-        this.network = new NetworkManager(roomId);
-        
-
-
-        this.initListeners();
-
+        this.network = new NetworkManager(roomId);        this.initListeners();
     }
-
-
 
     initListeners() {
         this.network.listenToGameState(
@@ -44,7 +38,6 @@ export class Game {
         );
         this.network.listenToAuction((data) => this.handleAuctionUpdate(data));
         this.network.listenToLog((entry) => this.showToast(entry.emoji, entry.message, entry.color));
-
     }
 
     showToast(emoji, message, color = '#ffffff') {
@@ -87,7 +80,7 @@ export class Game {
         this.updateUI();
 
         // Global Victory Check: If only one player remains, declare a winner for everyone
-        if (!this.gameEnded && this.gameState && this.gameState.playerOrder && this.gameState.playerOrder.length === 1) {
+        if (!this.gameEnded && this.gameState && this.gameState.playerOrder && this.gameState.playerOrder.length === 1 && Object.keys(this.players).length > 1) {
             const winnerId = this.gameState.playerOrder[0];
             if (this.players[winnerId]) {
                 this.gameEnded = true;
@@ -373,17 +366,7 @@ export class Game {
                     const buildings = this.gameState.buildings || {};
                     const currentLevel = buildings[tile.id] || 0;
                     if (currentLevel < 3) {
-                        // Base costs: Lv0->1: 0.5, Lv1->2: 0.75, Lv2->3: 1.0
-                        let costMultiplier = 0.5;
-                        if (currentLevel === 1) costMultiplier = 0.75;
-                        else if (currentLevel === 2) costMultiplier = 1.0;
-
-                        let cost = Math.floor(tile.price * costMultiplier);
-
-                        // Apply Career Construction Discount
-                        if (myCareer?.buyDiscount) {
-                            cost = Math.floor(cost * (1 - myCareer.buyDiscount));
-                        }
+                        const cost = Economy.getUpgradeCost(tile.price, currentLevel, myCareer);
 
                         const me = this.players[this.myPlayerId];
                         const wantsToUpgrade = await this.ui.offerUpgrade(tile, currentLevel, cost, me.balance);
@@ -570,7 +553,22 @@ export class Game {
                 break;
             case 'collect':
                 me.balance += card.value;
-                msg = `從大家那裡獲得 $${card.value} (暫緩)`;
+                msg = `從大家那裡獲得 $${card.value}`;
+                await this._applyFineAllEffect(card.value, '🎁', `${me.name} 生日快樂！每人送上 $${card.value} 禮金`);
+                break;
+            case 'demolish':
+                msg = await this._applyDemolishEffect();
+                break;
+            case 'steal':
+                msg = await this._applyStealEffect(card.value);
+                break;
+            case 'fine_all':
+                me.balance += card.value;
+                msg = `身為檢舉達人，向每位對手收取 $${card.value} 罰金！`;
+                await this._applyFineAllEffect(card.value, '👮', `${me.name} 檢舉成功！每位對手向其支付 $${card.value} 罰金`);
+                break;
+            case 'jail_victim':
+                msg = await this._applyJailVictimEffect();
                 break;
         }
 
@@ -582,10 +580,11 @@ export class Game {
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = Number(me.position);
         await this.network.pushUpdate(updates);
 
-        // GLOBAL LOG for Card Effect
+        // GLOBAL LOG for Card Effect (With safety replace)
         const cardEmoji = type === 'chance' ? '❓' : '🎁';
         const cardColor = type === 'chance' ? '#ef5350' : '#ab47bc';
-        await this.network.pushLog(cardEmoji, `${me.name} 抽到了${type === 'chance' ? '機會' : '命運'}卡：${card.text.replace(/<br>/g, ' ')}`, cardColor);
+        const safeText = (card.text || "未知效果").replace(/<br>/g, ' ');
+        await this.network.pushLog(cardEmoji, `${me.name} 抽到了${type === 'chance' ? '機會' : '命運'}卡：${safeText}`, cardColor);
 
         if (['move', 'moveto'].includes(card.type)) {
             await new Promise(r => setTimeout(r, 1000));
@@ -598,6 +597,162 @@ export class Game {
             // For money/collect cards, check if we went bankrupt
             return await this.checkBankruptcy(this.myPlayerId, null);
         }
+    }
+
+    // --- Modular Sabotage Card Handlers (Clean Architecture) ---
+
+    _getVictimId(strategy = 'random') {
+        const myId = this.myPlayerId;
+        const potentialVictims = (this.gameState.playerOrder || []).filter(pid => pid !== myId);
+        if (potentialVictims.length === 0) return null;
+
+        if (strategy === 'richest') {
+            return potentialVictims.reduce((a, b) => (this.players[a]?.balance || 0) > (this.players[b]?.balance || 0) ? a : b);
+        }
+        
+        // Default: Random
+        return potentialVictims[Math.floor(Math.random() * potentialVictims.length)];
+    }
+
+    async _applyDemolishEffect() {
+        const myId = this.myPlayerId;
+        const buildings = this.gameState.buildings || {};
+        const properties = this.gameState.properties || {};
+        
+        const opponents = (this.gameState.playerOrder || [])
+            .filter(pid => pid !== myId)
+            .map(pid => ({ ...this.players[pid], id: pid }))
+            .filter(p => !!p);
+
+        if (opponents.length === 0) return "目前沒有對手...";
+
+        const canSelect = (p) => {
+            return Object.keys(buildings).some(tid => properties[tid] === p.id && buildings[tid] > 0);
+        };
+
+        if (!opponents.some(p => canSelect(p))) {
+            return "對手沒有任何建築可拆除，偵測器判定：無效放電！";
+        }
+
+        const victimId = await this.ui.showTargetSelection(opponents, "💣 選擇拆除目標", canSelect);
+        if (!victimId) return "取消拆除";
+
+        const victim = this.players[victimId];
+        const victimTiles = Object.keys(buildings).filter(tid => properties[tid] === victimId && buildings[tid] > 0);
+        const targetTileId = victimTiles[Math.floor(Math.random() * victimTiles.length)];
+        
+        const tileName = TILE_DATA.find(t => t.id == targetTileId)?.name || "地產";
+        const oldLevel = buildings[targetTileId];
+        const newLevel = oldLevel - 1;
+
+        const updates = {
+            [`rooms/${this.roomId}/gameState/buildings/${targetTileId}`]: newLevel
+        };
+        await this.network.pushUpdate(updates);
+        await this.network.pushLog('💣', `拆除大隊！${this.players[this.myPlayerId].name} 拆除了 ${victim.name} 的 ${tileName} (Lv.${oldLevel} ➔ Lv.${newLevel})`, '#f44336');
+        
+        return `${victim.name} 的 ${tileName} 被拆掉啦！`;
+    }
+
+    async _applyStealEffect(amount) {
+        const myId = this.myPlayerId;
+        const opponents = (this.gameState.playerOrder || [])
+            .filter(pid => pid !== myId)
+            .map(pid => ({ ...this.players[pid], id: pid }))
+            .filter(p => !!p);
+
+        if (opponents.length === 0) return "目前沒有對手能搶奪...";
+
+        const amountToSteal = Number(amount) || 0;
+        const victimId = await this.ui.showTargetSelection(opponents, `💰 選擇竊取對象 (目標最高可得 $${amountToSteal})`);
+        
+        if (!victimId) return "取消竊取行動";
+
+        const victim = this.players[victimId];
+        const me = this.players[this.myPlayerId];
+        
+        if (!victim || !me) return "目標或自身狀態異常，竊取失敗";
+
+        // Safety: Ensure we don't steal more than they have, and everything is a Number
+        const currentVictimBalance = Number(victim.balance) || 0;
+        const currentMyBalance = Number(me.balance) || 0;
+        const actualAmount = Math.min(amountToSteal, currentVictimBalance);
+
+        if (actualAmount <= 0) {
+            return `這傢伙身無分文 (${victim.name})，搶了也沒意義...`;
+        }
+
+        // Update local state
+        me.balance = currentMyBalance + actualAmount;
+        victim.balance = currentVictimBalance - actualAmount;
+
+        // Atomic update to Firebase
+        const updates = {
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: Number(me.balance),
+            [`rooms/${this.roomId}/players/${victimId}/balance`]: Number(victim.balance)
+        };
+        
+        await this.network.pushUpdate(updates);
+        await this.network.pushLog('💰', `劫富濟貧！${me.name} 從 ${victim.name} 那裡成功順走了 $${actualAmount}！`, '#ff9800');
+        
+        // Final sanity check for bankruptcy
+        this.checkBankruptcy(victimId, this.myPlayerId);
+
+        return `成功從 ${victim.name} 手中獲得 $${actualAmount}`;
+    }
+
+    async _applyFineAllEffect(amount, emoji = '👮', logPrefix = '') {
+        const myId = this.myPlayerId;
+        const opponents = (this.gameState.playerOrder || []).filter(pid => pid !== myId);
+        const updates = {};
+        let totalCollected = 0;
+
+        opponents.forEach(oid => {
+            const victim = this.players[oid];
+            if (!victim) return;
+            const fine = Math.min(amount, victim.balance);
+            victim.balance -= fine;
+            totalCollected += fine;
+            updates[`rooms/${this.roomId}/players/${oid}/balance`] = victim.balance;
+        });
+
+        if (Object.keys(updates).length > 0) {
+            await this.network.pushUpdate(updates);
+            if (logPrefix) {
+                await this.network.pushLog(emoji, logPrefix, '#ffeb3b');
+            }
+            opponents.forEach(oid => this.checkBankruptcy(oid, this.myPlayerId));
+        }
+        
+        return opponents.length > 0 ? `成功收取罰款` : "無處罰對象";
+    }
+
+    async _applyJailVictimEffect() {
+        const myId = this.myPlayerId;
+        const opponents = (this.gameState.playerOrder || [])
+            .filter(pid => pid !== myId)
+            .map(pid => ({ ...this.players[pid], id: pid }))
+            .filter(p => !!p);
+
+        if (opponents.length === 0) return "目前沒有對手...";
+
+        const victimId = await this.ui.showTargetSelection(opponents, "🚨 選擇要通緝的對象");
+        if (!victimId) return "取消行動";
+
+        const victim = this.players[victimId];
+        victim.position = 10;
+        victim.isJailed = true;
+        victim.jailTurns = 0;
+
+        const updates = {
+            [`rooms/${this.roomId}/players/${victimId}/position`]: 10,
+            [`rooms/${this.roomId}/players/${victimId}/isJailed`]: true,
+            [`rooms/${this.roomId}/players/${victimId}/jailTurns`]: 0
+        };
+        await this.network.pushUpdate(updates);
+        await this.network.pushLog('🚨', `強力通緝！${this.players[this.myPlayerId].name} 舉報了 ${victim.name}，將其送入大牢！`, '#f44336');
+
+        return `${victim.name} 被抓去坐牢了！`;
     }
 
     hasColorSet(color, ownerId) {
@@ -615,20 +770,13 @@ export class Game {
         const buildings = this.gameState.buildings || {};
 
         // Calculate Base Rent based on Level
-        let rent = 0;
         const level = buildings[tile.id] || 0;
-        
-        if (level === 0) rent = Math.floor(tile.price * 0.2); 
-        else if (level === 1) rent = Math.floor(tile.price * 0.5);
-        else if (level === 2) rent = Math.floor(tile.price * 1.5);
-        else if (level === 3) rent = Math.floor(tile.price * 4.0);
-
-        // Double rent if owner has full set
         const isSet = this.hasColorSet(tile.color, ownerId);
-        if (isSet) rent *= 2;
+        const ownerCareer = this.getCareer(ownerId);
+        
+        const rent = Economy.getPropertyRent(tile.price, level, isSet, ownerCareer);
 
         const myCareer = this.getCareer(this.myPlayerId);
-        const ownerCareer = this.getCareer(ownerId);
 
         // --- HOOLIGAN SPECIAL LOGIC (流氓特權) ---
         if (myCareer && myCareer.id === 'HOOLIGAN') {
@@ -638,7 +786,9 @@ export class Game {
                 return false;
             }
 
-            const protectionFee = Math.min(Math.floor(rent * (myCareer.protectionFeeRate || 0.7)), owner.balance);
+            const calculatedFee = Math.floor(rent * (myCareer.protectionFeeRate || 0.4));
+            const cappedFee = Math.min(calculatedFee, 5000);
+            const protectionFee = Math.min(cappedFee, owner.balance);
             if (protectionFee > 0) {
                 me.balance += protectionFee;
                 owner.balance -= protectionFee;
@@ -693,10 +843,10 @@ export class Game {
     }
 
     async payUtilityRent(tile, ownerId) {
-        // Fee = 100 × total dice roll
         const [d1, d2] = this.gameState.lastDice || [1, 1];
         const diceTotal = d1 + d2;
-        const fee = diceTotal * 300;
+        const ownerCareer = this.getCareer(ownerId);
+        const fee = Economy.getUtilityRent(diceTotal, ownerCareer);
 
         const ownerName = this.players[ownerId]?.name || 'Unknown';
         this.ui.setGameMessage(`踩到 ${ownerName} 的 ${tile.name}，骰子點數 ${diceTotal} × $300 = $${fee}`, "orange");
@@ -705,15 +855,7 @@ export class Game {
         const owner = this.players[ownerId];
 
         me.balance -= fee;
-
-        // Career Bonus (Landlord)
-        const ownerCareer = this.getCareer(ownerId);
-        if (ownerCareer?.rentBonus) {
-            const bonusFee = Math.floor(fee * (1 + ownerCareer.rentBonus));
-            if (owner) owner.balance += bonusFee;
-        } else {
-            if (owner) owner.balance += fee;
-        }
+        if (owner) owner.balance += fee;
 
         this.updateUI();
 
@@ -734,8 +876,7 @@ export class Game {
         const ownerName = owner?.name || 'Unknown';
 
         // Acquisition price = (land + building investment) × 1.2
-        const buildingInvestment = level * Math.floor(tile.price * 0.5);
-        const acquisitionPrice = Math.floor((tile.price + buildingInvestment) * 1.2);
+        const acquisitionPrice = Economy.getAcquisitionPrice(tile.price, level);
 
         const wantsToAcquire = await this.ui.offerAcquisition(tile, level, acquisitionPrice, ownerName, me.balance);
 
@@ -791,35 +932,6 @@ export class Game {
         });
     }
 
-    async adminTeleport(targetId) {
-        const targetPos = Number(targetId);
-        console.log(`[Admin] Starting teleport to ${targetPos}`);
-        
-        const me = this.players[this.myPlayerId];
-        const oldPos = Number(me.position);
-        me.position = targetPos; 
-
-        console.log(`[Admin] Calc Go Bonus: ${oldPos} -> ${targetPos}`);
-        const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetPos);
-        if (goBonus > 0) {
-            me.balance += goBonus;
-            this.ui.setGameMessage(`(Admin) 傳送至 ${targetPos} 號格 (經過起點 +$${goBonus})`, "cyan");
-        }
-
-        console.log(`[Admin] Updating network state...`);
-        this.updateUI();
-        await this.network.pushUpdate({
-            [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position,
-            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
-        });
-        
-        await this.network.pushLog('🛠️', `管理員將 ${me.name} 傳送至 ${targetPos} 號格 ${goBonus > 0 ? '（獲得起點獎金 $2000）' : ''}`, '#00ccff');
-        
-        console.log(`[Admin] Interaction check...`);
-        await new Promise(r => setTimeout(r, 1000));
-        await this.checkTileInteraction(me.position);
-    }
-
     awardGoBonus(playerId, oldPos, newPos) {
         // Award $2000 (default) or career-specific bonus if player passes or lands exactly on GO (position 0)
         if (oldPos === newPos) return 0;
@@ -831,53 +943,6 @@ export class Game {
         if (newPos === 0) return bonusAmount; // Landed on GO
         if (newPos < oldPos) return bonusAmount; // Passed GO (wrap)
         return 0;
-    }
-
-    async adminAddMoney(amount) {
-        const me = this.players[this.myPlayerId];
-        me.balance += amount;
-        this.updateUI();
-        await this.network.pushUpdate({
-            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance
-        });
-        this.ui.setGameMessage(`(Debug) 資金變更 $${amount}`, "cyan");
-        await this.network.pushLog('🛠️', `管理員調整 ${me.name} 的資金：${amount > 0 ? '+' : ''}${amount}`, '#00ff00');
-    }
-
-    async adminSelfBankrupt() {
-        const me = this.players[this.myPlayerId];
-        me.balance = -1;
-        this.updateUI();
-        await this.network.pushUpdate({
-            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: -1
-        });
-        this.ui.setGameMessage("(Admin) 自殺式破產測試中...", "red");
-        await this.checkBankruptcy(this.myPlayerId, null);
-    }
-
-    async adminAcquireAll() {
-        const properties = this.gameState.properties || {};
-        const updates = {};
-        TILE_DATA.forEach(tile => {
-            if ((tile.type === 'property' || tile.type === 'utility' || tile.type === 'station') && !properties[tile.id]) {
-                updates[`rooms/${this.roomId}/gameState/properties/${tile.id}`] = this.myPlayerId;
-            }
-        });
-        if (Object.keys(updates).length > 0) {
-            await this.network.pushUpdate(updates);
-            this.ui.setGameMessage("(Admin) 已獲得所有無主地產", "cyan");
-            await this.network.pushLog('🛠️', `${this.players[this.myPlayerId]?.name} 執行了【資產大亨】（獲得所有無主地產）`, '#ffaa00');
-        }
-    }
-
-    async adminResetProperties() {
-        const updates = {
-            [`rooms/${this.roomId}/gameState/properties`]: null,
-            [`rooms/${this.roomId}/gameState/buildings`]: null
-        };
-        await this.network.pushUpdate(updates);
-        this.ui.setGameMessage("(Admin) 已清空所有地產權屬", "cyan");
-        await this.network.pushLog('🛠️', `管理員執行了【清空地盤】，所有地產歸還銀行。`, '#cccccc');
     }
 
     async goToJail() {
@@ -939,6 +1004,8 @@ export class Game {
 
     async liquidateProperty(tileId, sellValue) {
         const me = this.players[this.myPlayerId];
+        // Note: sellValue is passed from checkBankruptcy which calculates it in the UI flow for now
+        // But we should sync the UI flow to use Economy too.
         me.balance += sellValue;
 
         const updates = {

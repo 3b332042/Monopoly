@@ -1,5 +1,7 @@
-import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=33';
-import { PROFESSIONS } from './professions.js?v=33';
+import { db, ref, set, onValue, update, push, get, child } from './firebase.js?v=47';
+import { PROFESSIONS } from './professions.js?v=47';
+import { AdminManager } from './admin.js?v=47';
+import { CHANCE_CARDS, CHEST_CARDS } from './cards.js?v=47';
 
 // DOM Elements
 const lobbyScreen = document.getElementById('lobby-screen');
@@ -226,8 +228,8 @@ function startGameRequest() {
     });
 }
 
-import { Board } from './board.js?v=46';
-import { Game } from './game.js?v=46';
+import { Board } from './board.js?v=47';
+import { Game } from './game.js?v=47';
 
 let gameBoard = null;
 let gameInstance = null;
@@ -252,6 +254,7 @@ function startGame() {
     // Initialize Game Logic
     if (!gameInstance) {
         gameInstance = new Game(currentRoomId, currentPlayerId, gameBoard);
+        gameInstance.admin = new AdminManager(gameInstance);
 
         // --- CAREER SELECTION FLOW ---
         const handleCareerSelection = async () => {
@@ -324,7 +327,7 @@ function startGame() {
             if (!gameInstance) return;
             const val = parseInt(document.getElementById('admin-teleport-val').value);
             if (!isNaN(val) && val >= 0 && val <= 39) {
-                gameInstance.adminTeleport(val);
+                gameInstance.admin.teleport(val);
             } else {
                 alert("請輸入有效的格位 ID (0-39)");
             }
@@ -337,7 +340,7 @@ function startGame() {
             if (!gameInstance) return;
             const val = parseInt(document.getElementById('admin-money-val').value);
             if (!isNaN(val)) {
-                gameInstance.adminAddMoney(val);
+                gameInstance.admin.addMoney(val);
             }
         });
     }
@@ -366,26 +369,59 @@ function startGame() {
     const btnBankrupt = document.getElementById('btn-admin-bankrupt');
     if (btnBankrupt) {
         btnBankrupt.onclick = () => {
-            if (confirm("確定要在測試中直接破產嗎？")) gameInstance.adminSelfBankrupt();
+            if (confirm("確定要在測試中直接破產嗎？")) gameInstance.admin.selfBankrupt();
         };
     }
     const btnAcquireAll = document.getElementById('btn-admin-acquire-all');
     if (btnAcquireAll) {
         btnAcquireAll.onclick = () => {
-            gameInstance.adminAcquireAll();
+            if (gameInstance) gameInstance.admin.acquireAll();
         };
     }
     const btnResetProps = document.getElementById('btn-admin-reset-props');
     if (btnResetProps) {
         btnResetProps.onclick = () => {
-            if (confirm("要清空地圖上所有地產權屬嗎？")) gameInstance.adminResetProperties();
+            if (gameInstance) {
+                if (confirm("要清空地圖上所有地產權屬嗎？")) gameInstance.admin.resetProperties();
+            }
         };
     }
     const btnRich = document.getElementById('btn-admin-rich');
     if (btnRich) {
         btnRich.onclick = () => {
-            gameInstance.adminAddMoney(50000);
+            if (gameInstance) gameInstance.admin.addMoney(50000);
         };
+    }
+
+    const cardSelect = document.getElementById('admin-card-select');
+    if (cardSelect) {
+        cardSelect.innerHTML = '<option value="">-- 選擇卡片 --</option>';
+        CHANCE_CARDS.forEach(c => {
+            // ID already contains ch_
+            cardSelect.innerHTML += `<option value="${c.id}">❓ ${c.text.substring(0, 20)}...</option>`;
+        });
+        CHEST_CARDS.forEach(c => {
+            // ID already contains cc_
+            cardSelect.innerHTML += `<option value="${c.id}">🎁 ${c.text.substring(0, 20)}...</option>`;
+        });
+    }
+
+    const btnCard = document.getElementById('btn-admin-card');
+    if (btnCard) {
+        btnCard.addEventListener('click', () => {
+            if (!gameInstance || !cardSelect.value) return;
+            const cardId = cardSelect.value;
+            const type = cardId.startsWith('ch_') ? 'chance' : 'chest';
+            const cardPool = type === 'chance' ? CHANCE_CARDS : CHEST_CARDS;
+            const card = cardPool.find(c => c.id === cardId);
+            
+            if (card) {
+                console.log(`(ADMIN) Triggering card: ${cardId}`, card);
+                gameInstance.admin.triggerCard(card, type);
+            } else {
+                console.error(`(ADMIN) Card not found: ${cardId}`);
+            }
+        });
     }
     // ------------------------------
 
