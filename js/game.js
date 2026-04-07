@@ -618,10 +618,10 @@ export class Game {
         let rent = 0;
         const level = buildings[tile.id] || 0;
         
-        if (level === 0) rent = Math.floor(tile.price * 0.1); 
-        else if (level === 1) rent = Math.floor(tile.price * 0.3);
-        else if (level === 2) rent = Math.floor(tile.price * 0.6);
-        else if (level === 3) rent = Math.floor(tile.price * 1.0);
+        if (level === 0) rent = Math.floor(tile.price * 0.2); 
+        else if (level === 1) rent = Math.floor(tile.price * 0.5);
+        else if (level === 2) rent = Math.floor(tile.price * 1.5);
+        else if (level === 3) rent = Math.floor(tile.price * 4.0);
 
         // Double rent if owner has full set
         const isSet = this.hasColorSet(tile.color, ownerId);
@@ -687,7 +687,7 @@ export class Game {
 
         // Only offer acquisition if player didn't go bankrupt
         const me2 = this.players[this.myPlayerId];
-        if (me2 && me2.balance >= 0 && tile.type === 'property') {
+        if (me2 && me2.balance >= 0 && tile.type === 'property' && level < 3) {
             await this.offerAcquisition(tile, ownerId, level);
         }
     }
@@ -696,10 +696,10 @@ export class Game {
         // Fee = 100 × total dice roll
         const [d1, d2] = this.gameState.lastDice || [1, 1];
         const diceTotal = d1 + d2;
-        const fee = diceTotal * 100;
+        const fee = diceTotal * 300;
 
         const ownerName = this.players[ownerId]?.name || 'Unknown';
-        this.ui.setGameMessage(`踩到 ${ownerName} 的 ${tile.name}，骨子點數 ${diceTotal} × $100 = $${fee}`, "orange");
+        this.ui.setGameMessage(`踩到 ${ownerName} 的 ${tile.name}，骰子點數 ${diceTotal} × $300 = $${fee}`, "orange");
 
         const me = this.players[this.myPlayerId];
         const owner = this.players[ownerId];
@@ -722,7 +722,7 @@ export class Game {
         if (owner) updates[`rooms/${this.roomId}/players/${ownerId}/balance`] = owner.balance;
 
         await this.network.pushUpdate(updates);
-        await this.network.pushLog('⚡', `${me.name} 向 ${this.players[ownerId]?.name || '?'} 支付公共事業費 $${fee}（骰子 ${diceTotal} × $100）`, '#ff6600');
+        await this.network.pushLog('⚡', `${me.name} 向 ${this.players[ownerId]?.name || '?'} 支付公共事業費 $${fee}（骰子 ${diceTotal} × $300）`, '#ff6600');
         await new Promise(r => setTimeout(r, 2000));
 
         return await this.checkBankruptcy(this.myPlayerId, ownerId);

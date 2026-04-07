@@ -312,10 +312,10 @@ export class Board {
 
             if (tileEl && owner && tileData) {
                 const level = buildings[tileId] || 0;
-                let multiplier = 0.1;
-                if (level === 1) multiplier = 0.3;
-                else if (level === 2) multiplier = 0.6;
-                else if (level === 3) multiplier = 1.0;
+                let multiplier = 0.2;
+                if (level === 1) multiplier = 0.5;
+                else if (level === 2) multiplier = 1.5;
+                else if (level === 3) multiplier = 4.0;
 
                 let rent = Math.floor(tileData.price * multiplier);
                 const isSet = hasColorSet(tileData.color, ownerId);

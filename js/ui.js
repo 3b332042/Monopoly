@@ -356,9 +356,9 @@ export class UIManager {
             titleEl.textContent = `🌟 升級 ${tile.name} (Lv.${currentLevel} ➔ Lv.${currentLevel + 1})`;
 
             let percentage = "0%";
-            if (currentLevel === 0) percentage = "30%";
-            else if (currentLevel === 1) percentage = "60%";
-            else if (currentLevel === 2) percentage = "100%";
+            if (currentLevel === 0) percentage = "50%";
+            else if (currentLevel === 1) percentage = "150%";
+            else if (currentLevel === 2) percentage = "400%";
 
             descEl.textContent = `要花費 $${cost} 將此地升級為 Lv.${currentLevel + 1} 嗎？\n升級後過路費將提升至房價的 ${percentage}！`;
 
