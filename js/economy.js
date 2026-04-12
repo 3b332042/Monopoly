@@ -96,7 +96,7 @@ export class Economy {
         } else if (tile.type === 'utility') {
             return `骰子點數 × 300`;
         } else if (tile.type === 'station') {
-            return `$1,000 (固定)`;
+            return `$${tile.price || 800} (搭乘票價)`;
         }
         return "無";
     }

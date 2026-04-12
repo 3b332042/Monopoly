@@ -83,10 +83,11 @@ export const PROFESSIONS = {
         icon: '🔫',
         color: '#ff4444',
         description: '橫行霸道的街頭霸主，沒人敢收他的過路費。',
-        skills: '起點獲 $1,000，路過地反收 40% 保護費 (上限 $5,000)，保釋 $2,500',
+        skills: '起點獲 $1,000，路過地反收 40% 保護費 (上限 $5,000)，保釋 $2,500，事件/納稅扣錢 3 倍',
         goBonus: 1000,
         bailCost: 2500,
         isHooligan: true,
-        protectionFeeRate: 0.4
+        protectionFeeRate: 0.4,
+        eventPenaltyMultiplier: 3
     }
 };

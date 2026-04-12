@@ -344,7 +344,7 @@ export class UIManager {
         });
     }
 
-    offerJailOptions(jailTurns, playerBalance) {
+    offerJailOptions(jailTurns, playerBalance, bailCost) {
         return new Promise((resolve) => {
             const modal = document.getElementById('jail-modal');
             const descEl = document.getElementById('jail-status-desc');
@@ -359,14 +359,13 @@ export class UIManager {
 
             descEl.textContent = `你已經被關了 ${jailTurns} 回合。`;
 
-            // Enforce $1500 penalty logic
-            const jailFine = 1500;
-            if (playerBalance < jailFine) {
+            // Use the provided bailCost
+            if (playerBalance < bailCost) {
                 btnPay.disabled = true;
-                btnPay.textContent = "保釋金不足 ($1500)";
+                btnPay.textContent = `保釋金不足 ($${bailCost})`;
             } else {
                 btnPay.disabled = false;
-                btnPay.textContent = "付保釋金 $1500出獄";
+                btnPay.textContent = `付保釋金 $${bailCost} 出獄`;
             }
 
             modal.classList.remove('hidden');

@@ -25,7 +25,7 @@ export class Game {
         this.gameEnded = false;
 
         this.ui = new UIManager();
-        this.network = new NetworkManager(roomId);        this.initListeners();
+        this.network = new NetworkManager(roomId); this.initListeners();
     }
 
     initListeners() {
@@ -142,195 +142,185 @@ export class Game {
     }
 
     async rollDice(forceD1, forceD2) {
-        if (!this.gameState.playerOrder) return;
-        const currentTurnPlayerId = this.gameState.playerOrder[this.gameState.turnIndex];
+        if (!this.gameState.playerOrder || this.isProcessingTurn) return;
 
+        const currentTurnPlayerId = this.gameState.playerOrder[this.gameState.turnIndex];
         if (currentTurnPlayerId !== this.myPlayerId) {
             console.warn("Not your turn!");
             return;
         }
 
-        if (this.isProcessingTurn) return; // Double check
         this.isProcessingTurn = true;
-        this.updateUI(); // Disable button immediately
+        this.updateUI();
 
-        const me = this.players[this.myPlayerId];
-        const oldPos = me.position;
-        const myCareer = this.getCareer(this.myPlayerId);
-        let d1, d2, steps;
+        try {
+            const me = this.players[this.myPlayerId];
+            let d1, d2;
 
-        if (me.isJailed) {
-            // Police never pays bail, Gambler bail is $1000, others $1500
-            let bailCost = 1500;
-            if (myCareer?.freeBail) bailCost = 0;
-            else if (myCareer?.bailCost) bailCost = myCareer.bailCost;
+            // 1. Handle Jail Sequence if needed
+            if (me.isJailed) {
+                const jailResult = await this._handleJailSequence(me, forceD1, forceD2);
+                if (jailResult.shouldStop) return;
+                d1 = jailResult.d1;
+                d2 = jailResult.d2;
+            }
 
-            const action = await this.ui.offerJailOptions(me.jailTurns, me.balance, bailCost);
-            if (action === 'pay') {
-                me.balance -= bailCost;
-                me.isJailed = false;
-                me.jailTurns = 0;
-
-                const msg = bailCost > 0 ? `支付保釋金 $${bailCost} 出獄！` : `身為警員，直接獲得假釋出獄！`;
-                this.ui.setGameMessage(msg, "#00ff00");
-                await this.network.pushLog('🔓', `${me.name} ${msg}`, '#00ff88');
-
-                await this.network.pushUpdate({
-                    [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
-                    [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
-                    [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: 0
-                });
-                await new Promise(r => setTimeout(r, 1000));
-                const isBankrupt = await this.checkBankruptcy(this.myPlayerId, null);
-                if (isBankrupt) return;
-            } else {
+            // 2. Perform Roll (if not already rolled in jail sequence)
+            if (d1 === undefined) {
                 d1 = forceD1 !== undefined ? forceD1 : Math.floor(Math.random() * 6) + 1;
                 d2 = forceD2 !== undefined ? forceD2 : Math.floor(Math.random() * 6) + 1;
-                steps = d1 + d2;
                 await this.board.rollDiceAnimation(d1, d2);
+            }
 
-                if (d1 === d2) {
+            // 3. Move and Interact
+            await this._movePlayerSequence(me, d1, d2);
+
+        } catch (error) {
+            console.error("Error during rollDice:", error);
+            this.showToast("❌", "遊戲發生錯誤，請重新整理頁面", "red");
+        } finally {
+            this.isProcessingTurn = false;
+            this.updateUI();
+        }
+    }
+
+    async _handleJailSequence(me, forceD1, forceD2) {
+        const myCareer = this.getCareer(this.myPlayerId);
+        let bailCost = (myCareer?.freeBail) ? 0 : (myCareer?.bailCost || 1500);
+
+        const action = await this.ui.offerJailOptions(me.jailTurns, me.balance, bailCost);
+
+        if (action === 'pay') {
+            me.balance -= bailCost;
+            me.isJailed = false;
+            me.jailTurns = 0;
+
+            const msg = bailCost > 0 ? `支付保釋金 $${bailCost} 出獄！` : `出獄了！`;
+            this.ui.setGameMessage(msg, "#00ff88");
+            await this.network.pushLog('🔓', `${me.name} ${msg}`, '#00ff88');
+
+            await this.network.pushUpdate({
+                [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
+                [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
+                [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: 0
+            });
+
+            await new Promise(r => setTimeout(r, 1000));
+            const isBankrupt = await this.checkBankruptcy(this.myPlayerId, null);
+            return { shouldStop: isBankrupt };
+        } else {
+            const d1 = forceD1 !== undefined ? forceD1 : Math.floor(Math.random() * 6) + 1;
+            const d2 = forceD2 !== undefined ? forceD2 : Math.floor(Math.random() * 6) + 1;
+            await this.board.rollDiceAnimation(d1, d2);
+
+            if (d1 === d2) {
+                me.isJailed = false;
+                me.jailTurns = 0;
+                this.ui.setGameMessage(`擲出雙子 ${d1}! 成功越獄！`, "#00ff88");
+                await this.network.pushLog('🎲', `${me.name} 擲出雙子 ${d1}！成功越獄！`, '#00ff88');
+
+                // Do NOT advance turn here, logic will continue to movement
+                return { shouldStop: false, d1, d2 };
+            } else {
+                me.jailTurns = (me.jailTurns || 0) + 1;
+                if (me.jailTurns >= 3) {
+                    me.balance -= bailCost;
                     me.isJailed = false;
                     me.jailTurns = 0;
-
-                    // Gambler Double Bonus
-                    let doubleBonusMsg = "";
-                    if (myCareer?.doubleBonus) {
-                        me.balance += myCareer.doubleBonus;
-                        doubleBonusMsg = ` (賭徒加成 +$${myCareer.doubleBonus})`;
-                    }
-
-                    this.ui.setGameMessage(`擲出雙子 ${d1}! 成功越獄！${doubleBonusMsg}`, "#00ff00");
-                    await this.network.pushLog('🎲', `${me.name} 擲出雙子 ${d1}！成功越獄！${doubleBonusMsg}`, '#00ff88');
+                    const msg = `坐牢滿 3 回合，強制${bailCost > 0 ? `支付 $${bailCost}` : ''}出獄。`;
+                    this.ui.setGameMessage(msg, "orange");
                     await this.network.pushUpdate({
                         [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
                         [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
                         [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: 0
                     });
+                    await new Promise(r => setTimeout(r, 1000));
+                    const isBankrupt = await this.checkBankruptcy(this.myPlayerId, null);
+                    return { shouldStop: isBankrupt, d1, d2 };
                 } else {
-                    me.jailTurns = (me.jailTurns || 0) + 1;
-                    if (me.jailTurns >= 3) {
-                        me.balance -= bailCost;
-                        me.isJailed = false;
-                        me.jailTurns = 0;
-                        const msg = `坐牢滿 3 回合，強制${bailCost > 0 ? `支付 $${bailCost}` : ''}出獄。`;
-                        this.ui.setGameMessage(msg, "orange");
-                        await this.network.pushLog('⛓️', `${me.name} ${msg}`, '#ff6600');
-                        await this.network.pushUpdate({
-                            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
-                            [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: false,
-                            [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: 0
-                        });
-                        await new Promise(r => setTimeout(r, 1000));
-                        const isBankrupt = await this.checkBankruptcy(this.myPlayerId, null);
-                        if (isBankrupt) return;
-                    } else {
-                        this.ui.setGameMessage(`擲出 ${d1}+${d2} 未中雙子，繼續坐牢 (${me.jailTurns}/3 回合)`, "red");
-                        const nextIndex = (this.gameState.turnIndex + 1) % this.gameState.playerOrder.length;
-                        await this.network.pushUpdate({
-                            [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: me.jailTurns,
-                            [`rooms/${this.roomId}/gameState/lastDice`]: [d1, d2],
-                            [`rooms/${this.roomId}/gameState/turnIndex`]: nextIndex
-                        });
-                        this.isProcessingTurn = false;
-                        this.updateUI();
-                        return;
-                    }
+                    this.ui.setGameMessage(`擲出 ${d1}+${d2} 未中雙子，繼續坐牢 (${me.jailTurns}/3 回合)`, "red");
+                    const nextIndex = (this.gameState.turnIndex + 1) % this.gameState.playerOrder.length;
+                    await this.network.pushUpdate({
+                        [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: me.jailTurns,
+                        [`rooms/${this.roomId}/gameState/lastDice`]: [d1, d2],
+                        [`rooms/${this.roomId}/gameState/turnIndex`]: nextIndex
+                    });
+                    return { shouldStop: true };
                 }
             }
         }
+    }
 
-        if (d1 === undefined) {
-            d1 = forceD1 !== undefined ? forceD1 : Math.floor(Math.random() * 6) + 1;
-            d2 = forceD2 !== undefined ? forceD2 : Math.floor(Math.random() * 6) + 1;
-            steps = d1 + d2;
-            await this.board.rollDiceAnimation(d1, d2);
-        }
+    async _movePlayerSequence(me, d1, d2) {
+        const myCareer = this.getCareer(this.myPlayerId);
+        const oldPos = me.position;
+        const steps = d1 + d2;
+        const isDoubles = (d1 === d2);
 
-        // Gambler Double Bonus (normal roll)
-        if (d1 === d2 && myCareer?.doubleBonus && !me.isJailed) {
+        // 1. Double Bonus logic (Gambler)
+        if (isDoubles && myCareer?.doubleBonus) {
             me.balance += myCareer.doubleBonus;
         }
 
+        // 2. Move
         const passedGo = me.move(steps);
         const goBonus = passedGo ? this.awardGoBonus(this.myPlayerId, oldPos, me.position) : 0;
         if (passedGo) me.balance += goBonus;
 
+        // 3. Career-specific bonuses during movement
         let msg = `擲出了 ${d1} + ${d2} = ${steps}!`;
         if (passedGo && goBonus > 0) msg += ` (經過起點 +$${goBonus})`;
-        if (d1 === d2 && myCareer?.doubleBonus) msg += ` 🎰 雙子獎勵 +$${myCareer.doubleBonus}`;
+        if (isDoubles && myCareer?.doubleBonus) msg += ` 🎰 雙子獎勵 +$${myCareer.doubleBonus}`;
 
-        // Police "Jail Passage" Bonus
+        // Police "Jail Passage" bonus
         if (myCareer?.jailVisitBonus) {
             let passedJail = false;
             for (let i = 1; i <= steps; i++) {
-                if ((oldPos + i) % 40 === 10) {
-                    passedJail = true;
-                    break;
-                }
+                if ((oldPos + i) % 40 === 10) { passedJail = true; break; }
             }
             if (passedJail) {
                 me.balance += myCareer.jailVisitBonus;
                 msg += ` 🚓 探監巡邏 +$${myCareer.jailVisitBonus}!`;
-                await this.network.pushLog('👮', `${me.name} 執行探監巡邏，獲得津貼 $${myCareer.jailVisitBonus}。`, '#1e90ff');
             }
         }
 
-        // Beggar "Alms" Bonus
-        if (myCareer && myCareer.beggarMultiplier) {
-            // Get all player balances and sort ascending
+        // Beggar multiplier balance check
+        if (myCareer?.beggarMultiplier) {
             const allBalances = Object.values(this.players).map(p => p.balance).sort((a, b) => a - b);
-            // If balance is at or below the "second to last" person's balance
             const threshold = allBalances.length >= 2 ? allBalances[1] : allBalances[0];
-
             if (me.balance <= threshold) {
                 const alms = steps * myCareer.beggarMultiplier;
                 me.balance += alms;
                 msg += ` 🍚 丐幫施捨 +$${alms}!`;
-                await this.network.pushLog('🍚', `${me.name} 獲得路人施捨 $${alms}！`, '#8b4513');
             }
         }
 
         this.ui.setGameMessage(msg, "#00ff00");
 
-        // 1. Update Movement
-        const updates = {};
-        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = me.position;
-        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
-        updates[`rooms/${this.roomId}/gameState/lastDice`] = [d1, d2];
+        // 4. Initial Update (Position + Balance + LastDice)
+        await this.network.pushUpdate({
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position,
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
+            [`rooms/${this.roomId}/gameState/lastDice`]: [d1, d2]
+        });
+        await this.network.pushLog('🎲', `${me.name} ${msg}`, '#00ff88');
 
-        await this.network.pushUpdate(updates);
-        if (passedGo && goBonus > 0) {
-            await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！（經過起點 +$${goBonus}）`, '#00ff88');
-        } else {
-            await this.network.pushLog('🎲', `${me.name} 擲出了 ${d1} + ${d2} = ${steps}！`, '#00ff88');
-        }
+        // Animation delay
+        await new Promise(r => setTimeout(r, (steps * 300) + 500));
 
-        // Wait for animation
-        const animationDelay = (steps * 300) + 500;
-        await new Promise(r => setTimeout(r, animationDelay));
-
-        // 2. Interaction
+        // 5. Interaction
         const isBankrupt = await this.checkTileInteraction(me.position);
         if (isBankrupt) return;
 
-
-
-        // 3. Next Turn Logic
-        const endTurnUpdates = {};
-        if (d1 !== d2) {
+        // 6. Next Turn Logic
+        if (!isDoubles) {
             const nextIndex = (this.gameState.turnIndex + 1) % this.gameState.playerOrder.length;
-            endTurnUpdates[`rooms/${this.roomId}/gameState/turnIndex`] = nextIndex;
+            await this.network.pushUpdate({
+                [`rooms/${this.roomId}/gameState/turnIndex`]: nextIndex
+            });
         } else {
-            console.log("Doubles! Roll Again.");
+            this.showToast("🎲", "雙子！獲得額外一次擲骰機會", "#00ffff");
         }
-
-        if (Object.keys(endTurnUpdates).length > 0) {
-            await this.network.pushUpdate(endTurnUpdates);
-        }
-
-        this.isProcessingTurn = false;
-        this.updateUI();
     }
 
     async checkTileInteraction(position) {
@@ -433,15 +423,13 @@ export class Game {
         const me = this.players[this.myPlayerId];
         const myCareer = this.getCareer(this.myPlayerId);
 
-        // Traveler Discount
+        // Offer Flight (Traveler Discount)
         let price = tile.price;
         if (myCareer?.stationDiscount !== undefined) {
             price = Math.floor(price * myCareer.stationDiscount);
         }
 
-        // Filter out GoToJail, Jail (if you don't want them flying there), and current pos
         const destinations = TILE_DATA.filter(t => t.id !== me.position && t.type !== 'gotojail' && t.type !== 'jail');
-
         const targetId = await this.ui.offerStationFlight(price, destinations, me.balance);
 
         if (targetId !== null) {
@@ -449,18 +437,12 @@ export class Game {
             me.balance -= price;
             me.position = targetId;
 
-            // Check if passed GO (position wrapped or landed on 0)
             const goBonus = this.awardGoBonus(this.myPlayerId, oldPos, targetId);
-            if (goBonus > 0) {
-                me.balance += goBonus;
-                this.ui.setGameMessage(`花費 $${price} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！(經過起點 +$${goBonus})`, "#00ffff");
-            } else {
-                this.ui.setGameMessage(`花費 $${price} 搭乘高鐵前往 ${TILE_DATA[targetId].name}`, "#00ffff");
-            }
+            if (goBonus > 0) me.balance += goBonus;
 
+            this.ui.setGameMessage(`花費 $${price} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！${goBonus > 0 ? `(經過起點 +$${goBonus})` : ''}`, "#00ffff");
             this.updateUI();
 
-            // Push payment and new position
             const updates = {
                 [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
                 [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position
@@ -468,12 +450,8 @@ export class Game {
             await this.network.pushUpdate(updates);
             await this.network.pushLog('🚉', `${me.name} 搭乘高鐵前往 ${TILE_DATA[targetId].name}！支出 $${price}${goBonus > 0 ? `（獲得起點獎金 $${goBonus}）` : ''}`, '#00ffff');
 
-            // Wait for visual movement update
             await new Promise(r => setTimeout(r, 1000));
-
-            // Interaction on new tile
-            const isBankrupt = await this.checkTileInteraction(me.position);
-            if (isBankrupt) return;
+            await this.checkTileInteraction(me.position);
         } else {
             this.ui.setGameMessage(`你選擇不搭車。`, "#ccc");
         }
@@ -525,10 +503,16 @@ export class Game {
         let msg = "";
 
         switch (card.type) {
-            case 'money':
-                me.balance += card.value;
-                msg = card.value > 0 ? `獲得獎金 $${card.value}` : `支付 $${Math.abs(card.value)}`;
+            case 'money': {
+                let val = card.value;
+                const myCareer = this.getCareer(this.myPlayerId);
+                if (val < 0 && myCareer?.eventPenaltyMultiplier) {
+                    val *= myCareer.eventPenaltyMultiplier;
+                }
+                me.balance += val;
+                msg = val > 0 ? `獲得獎金 $${val}` : `支付 $${Math.abs(val)}`;
                 break;
+            }
             case 'move': {
                 const oldPos = me.position;
                 me.move(card.value);
@@ -578,6 +562,8 @@ export class Game {
         const updates = {};
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = Number(me.balance);
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/position`] = Number(me.position);
+        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`] = !!me.isJailed;
+        updates[`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`] = Number(me.jailTurns || 0);
         await this.network.pushUpdate(updates);
 
         // GLOBAL LOG for Card Effect (With safety replace)
@@ -609,7 +595,7 @@ export class Game {
         if (strategy === 'richest') {
             return potentialVictims.reduce((a, b) => (this.players[a]?.balance || 0) > (this.players[b]?.balance || 0) ? a : b);
         }
-        
+
         // Default: Random
         return potentialVictims[Math.floor(Math.random() * potentialVictims.length)];
     }
@@ -618,7 +604,7 @@ export class Game {
         const myId = this.myPlayerId;
         const buildings = this.gameState.buildings || {};
         const properties = this.gameState.properties || {};
-        
+
         const opponents = (this.gameState.playerOrder || [])
             .filter(pid => pid !== myId)
             .map(pid => ({ ...this.players[pid], id: pid }))
@@ -640,7 +626,7 @@ export class Game {
         const victim = this.players[victimId];
         const victimTiles = Object.keys(buildings).filter(tid => properties[tid] === victimId && buildings[tid] > 0);
         const targetTileId = victimTiles[Math.floor(Math.random() * victimTiles.length)];
-        
+
         const tileName = TILE_DATA.find(t => t.id == targetTileId)?.name || "地產";
         const oldLevel = buildings[targetTileId];
         const newLevel = oldLevel - 1;
@@ -650,7 +636,7 @@ export class Game {
         };
         await this.network.pushUpdate(updates);
         await this.network.pushLog('💣', `拆除大隊！${this.players[this.myPlayerId].name} 拆除了 ${victim.name} 的 ${tileName} (Lv.${oldLevel} ➔ Lv.${newLevel})`, '#f44336');
-        
+
         return `${victim.name} 的 ${tileName} 被拆掉啦！`;
     }
 
@@ -665,12 +651,12 @@ export class Game {
 
         const amountToSteal = Number(amount) || 0;
         const victimId = await this.ui.showTargetSelection(opponents, `💰 選擇竊取對象 (目標最高可得 $${amountToSteal})`);
-        
+
         if (!victimId) return "取消竊取行動";
 
         const victim = this.players[victimId];
         const me = this.players[this.myPlayerId];
-        
+
         if (!victim || !me) return "目標或自身狀態異常，竊取失敗";
 
         // Safety: Ensure we don't steal more than they have, and everything is a Number
@@ -691,10 +677,10 @@ export class Game {
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: Number(me.balance),
             [`rooms/${this.roomId}/players/${victimId}/balance`]: Number(victim.balance)
         };
-        
+
         await this.network.pushUpdate(updates);
         await this.network.pushLog('💰', `劫富濟貧！${me.name} 從 ${victim.name} 那裡成功順走了 $${actualAmount}！`, '#ff9800');
-        
+
         // Final sanity check for bankruptcy
         this.checkBankruptcy(victimId, this.myPlayerId);
 
@@ -709,10 +695,17 @@ export class Game {
 
         opponents.forEach(oid => {
             const victim = this.players[oid];
+            const victimCareer = this.getCareer(oid);
             if (!victim) return;
-            const fine = Math.min(amount, victim.balance);
-            victim.balance -= fine;
-            totalCollected += fine;
+
+            let fineAmount = amount;
+            if (fineAmount > 0 && victimCareer?.eventPenaltyMultiplier) {
+                fineAmount *= victimCareer.eventPenaltyMultiplier;
+            }
+
+            const actualFine = Math.min(fineAmount, victim.balance);
+            victim.balance -= actualFine;
+            totalCollected += actualFine;
             updates[`rooms/${this.roomId}/players/${oid}/balance`] = victim.balance;
         });
 
@@ -723,7 +716,7 @@ export class Game {
             }
             opponents.forEach(oid => this.checkBankruptcy(oid, this.myPlayerId));
         }
-        
+
         return opponents.length > 0 ? `成功收取罰款` : "無處罰對象";
     }
 
@@ -765,7 +758,7 @@ export class Game {
     async payRent(tile, ownerId) {
         const me = this.players[this.myPlayerId];
         const owner = this.players[ownerId];
-        
+
         const properties = this.gameState.properties || {};
         const buildings = this.gameState.buildings || {};
 
@@ -773,7 +766,7 @@ export class Game {
         const level = buildings[tile.id] || 0;
         const isSet = this.hasColorSet(tile.color, ownerId);
         const ownerCareer = this.getCareer(ownerId);
-        
+
         const rent = Economy.getPropertyRent(tile.price, level, isSet, ownerCareer);
 
         const myCareer = this.getCareer(this.myPlayerId);
@@ -804,17 +797,14 @@ export class Game {
                 this.ui.setGameMessage(`想向 ${owner.name} 收保護費，但他口袋空空...`, "#888");
                 await this.network.pushLog('🔪', `想收 ${owner.name} 保護費，但他口袋空空...`, '#888');
             }
-            
+
             await new Promise(r => setTimeout(r, 1500));
             // Check if the owner went bankrupt from the protection fee
             await this.checkBankruptcy(ownerId, this.myPlayerId);
             return false;
         }
 
-        // Apply Owner's Rent Bonus (e.g. Landlord career +40%)
-        if (ownerCareer?.rentBonus) {
-            rent = Math.floor(rent * (1 + ownerCareer.rentBonus));
-        }
+        // Apply Owner's Rent Bonus (Already handled inside Economy.getPropertyRent)
 
         // --- REGULAR RENT LOGIC ---
         me.balance -= rent;
@@ -903,15 +893,22 @@ export class Game {
 
     async payTax(tile) {
         const me = this.players[this.myPlayerId];
-        me.balance -= tile.price;
-        this.ui.setGameMessage(`繳納稅金 $${tile.price}`, "orange");
+        const myCareer = this.getCareer(this.myPlayerId);
+        
+        let tax = tile.price;
+        if (myCareer?.eventPenaltyMultiplier) {
+            tax *= myCareer.eventPenaltyMultiplier;
+        }
+
+        me.balance -= tax;
+        this.ui.setGameMessage(`繳納稅金 $${tax}`, "orange");
         this.updateUI();
 
         const updates = {};
         updates[`rooms/${this.roomId}/players/${this.myPlayerId}/balance`] = me.balance;
 
         await this.network.pushUpdate(updates);
-        await this.network.pushLog('🏦', `${me.name} 繳納稅金 $${tile.price}（${tile.name}）`, '#ffcc00');
+        await this.network.pushLog('🏦', `${me.name} 繳納稅金 $${tax}（${tile.name}${myCareer?.eventPenaltyMultiplier ? `：流氓加重 ${myCareer.eventPenaltyMultiplier} 倍` : ''}）`, '#ffcc00');
         await new Promise(r => setTimeout(r, 1500));
 
         // Check bankruptcy for taxes (creditor = bank / null)
@@ -1163,24 +1160,27 @@ export class Game {
         const biddingModal = document.getElementById('auction-bidding-modal');
         if (!biddingModal) return;
 
-        // Always track the latest auction state for closeAuction to read
-        this._latestAuctionData = auctionData;
-
-        // Reset the closed guard for bidders if we see a NEW auction starting
-        if (auctionData && this._lastAuctionTileId !== auctionData.tileId) {
-            this._auctionClosed = false;
-            this._lastAuctionTileId = auctionData.tileId;
-        }
-
         // No auction active
         if (!auctionData) {
-            this._lastAuctionTileId = null; // Clear ID to ensure next auction (even same tile) resets guard
+            this._lastAuctionTileId = null;
+            this._latestAuctionData = null;
+            this._auctionClosed = false;
             biddingModal.classList.add('hidden');
             if (this._auctionTimerInterval) {
                 clearInterval(this._auctionTimerInterval);
                 this._auctionTimerInterval = null;
             }
             return;
+        }
+
+        // Always track the latest auction state for closeAuction to read
+        this._latestAuctionData = auctionData;
+        this._auctionTargetEndTime = auctionData.endTime; // Reactive sync
+
+        // Reset the closed guard for bidders if we see a NEW auction starting (Tile change or fresh data)
+        if (this._lastAuctionTileId !== auctionData.tileId) {
+            this._auctionClosed = false;
+            this._lastAuctionTileId = auctionData.tileId;
         }
 
         const tile = TILE_DATA.find(t => t.id === auctionData.tileId);
@@ -1217,9 +1217,15 @@ export class Game {
                     alert(`餘額不足！你只有 $${me.balance}`);
                     return;
                 }
+
+                // IMPORTANT: When bidding, we push the extension directly to the endTime
+                const now = Date.now();
+                const newEndTime = Math.max(auctionData.endTime, now + 10000); // Ensure at least 10s remaining
+
                 await this.network.pushUpdate({
                     [`rooms/${this.roomId}/auction/currentBid`]: amount,
-                    [`rooms/${this.roomId}/auction/currentBidderId`]: this.myPlayerId
+                    [`rooms/${this.roomId}/auction/currentBidderId`]: this.myPlayerId,
+                    [`rooms/${this.roomId}/auction/endTime`]: newEndTime
                 });
                 document.getElementById('auction-bid-input').value = '';
             };
@@ -1230,13 +1236,13 @@ export class Game {
             biddingModal.classList.remove('hidden');
         }
 
-        // Capture the endTime for this interval
-        const endTime = auctionData.endTime;
-
-        // Start/update countdown timer — only start once
+        // Start countdown timer if not already running
         if (!this._auctionTimerInterval) {
             this._auctionTimerInterval = setInterval(async () => {
-                const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+                // Read the dynamic target time (updated via handleAuctionUpdate in outer scope)
+                const target = this._auctionTargetEndTime || 0;
+                const remaining = Math.max(0, Math.ceil((target - Date.now()) / 1000));
+
                 const timerEl = document.getElementById('auction-timer');
                 if (timerEl) timerEl.textContent = remaining;
 
@@ -1251,9 +1257,8 @@ export class Game {
                         if (latestAuction) {
                             this.closeAuction(latestAuction).catch(err => {
                                 console.error("[Auction] Error during closeAuction:", err);
-                                // Safety: Ensure modal is hidden even on error
-                                const biddingModal = document.getElementById('auction-bidding-modal');
-                                if (biddingModal) biddingModal.classList.add('hidden');
+                                const modal = document.getElementById('auction-bidding-modal');
+                                if (modal) modal.classList.add('hidden');
                             });
                         }
                     }
