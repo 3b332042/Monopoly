@@ -23,6 +23,7 @@ export class Game {
         };
         this.isProcessingTurn = false;
         this.gameEnded = false;
+        this.WIN_ASSET_THRESHOLD = 70000; // Target assets to win directly
 
         this.ui = new UIManager();
         this.network = new NetworkManager(roomId); this.initListeners();
@@ -68,6 +69,18 @@ export class Game {
             } else {
                 Object.assign(this.players[pid], data[pid]);
             }
+
+            // Attached calculated total assets for UI/Logic use
+            if (this.gameState && this.gameState.properties) {
+                this.players[pid].totalAssets = Economy.calculateTotalAssets(
+                    this.players[pid],
+                    this.gameState.properties,
+                    this.gameState.buildings || {},
+                    TILE_DATA
+                );
+            } else {
+                this.players[pid].totalAssets = this.players[pid].balance;
+            }
         });
 
         // Visual Updates
@@ -78,8 +91,29 @@ export class Game {
         }
 
         this.updateUI();
+        
+        // 1. Asset Victory Check: Check if anyone reached the winning threshold
+        if (!this.gameEnded && this.gameState && this.gameState.playerOrder) {
+            for (const pid of this.gameState.playerOrder) {
+                const p = this.players[pid];
+                if (p) {
+                    const assets = Economy.calculateTotalAssets(p, this.gameState.properties, this.gameState.buildings || {}, TILE_DATA);
+                    if (assets >= this.WIN_ASSET_THRESHOLD) {
+                        this.gameEnded = true;
+                        const winnerName = p.name;
+                        console.log(`🏆 Asset Victory: ${winnerName} reached $${assets}!`);
+                        setTimeout(() => {
+                            this.ui.showVictory(`${winnerName} (達成 $${this.WIN_ASSET_THRESHOLD} 資產目標)`, () => {
+                                location.reload();
+                            });
+                        }, 1000);
+                        return; // Stop processing further checks
+                    }
+                }
+            }
+        }
 
-        // Global Victory Check: If only one player remains, declare a winner for everyone
+        // 2. Global Victory Check: If only one player remains (Original logic)
         if (!this.gameEnded && this.gameState && this.gameState.playerOrder && this.gameState.playerOrder.length === 1 && Object.keys(this.players).length > 1) {
             const winnerId = this.gameState.playerOrder[0];
             if (this.players[winnerId]) {
@@ -124,7 +158,7 @@ export class Game {
 
         this.ui.updateRollButtonState(isMyTurn, this.isProcessingTurn, pName, pIdShort, amIInGame, isDoubles);
         this.ui.updateDiceResult(d1, d2);
-        this.ui.updateDebugOverlay(playerOrder, this.players, currentTurnPlayerId, this.myPlayerId, isMyTurn);
+        this.ui.updateDebugOverlay(playerOrder, this.players, currentTurnPlayerId, this.myPlayerId, isMyTurn, this.WIN_ASSET_THRESHOLD);
 
         // Show/hide auction button (only on your turn, before rolling)
         const auctionBtn = document.getElementById('auction-btn');
@@ -158,11 +192,13 @@ export class Game {
             let d1, d2;
 
             // 1. Handle Jail Sequence if needed
+            let escapedThisTurn = false;
             if (me.isJailed) {
                 const jailResult = await this._handleJailSequence(me, forceD1, forceD2);
                 if (jailResult.shouldStop) return;
                 d1 = jailResult.d1;
                 d2 = jailResult.d2;
+                escapedThisTurn = !!jailResult.escaped;
             }
 
             // 2. Perform Roll (if not already rolled in jail sequence)
@@ -173,7 +209,7 @@ export class Game {
             }
 
             // 3. Move and Interact
-            await this._movePlayerSequence(me, d1, d2);
+            await this._movePlayerSequence(me, d1, d2, escapedThisTurn);
 
         } catch (error) {
             console.error("Error during rollDice:", error);
@@ -251,7 +287,7 @@ export class Game {
         }
     }
 
-    async _movePlayerSequence(me, d1, d2) {
+    async _movePlayerSequence(me, d1, d2, wasEscaped = false) {
         const myCareer = this.getCareer(this.myPlayerId);
         const oldPos = me.position;
         const steps = d1 + d2;
@@ -270,7 +306,10 @@ export class Game {
         // 3. Career-specific bonuses during movement
         let msg = `擲出了 ${d1} + ${d2} = ${steps}!`;
         if (passedGo && goBonus > 0) msg += ` (經過起點 +$${goBonus})`;
-        if (isDoubles && myCareer?.doubleBonus) msg += ` 🎰 雙子獎勵 +$${myCareer.doubleBonus}`;
+        if (isDoubles && myCareer?.doubleBonus) {
+            me.balance += myCareer.doubleBonus;
+            msg += ` 🎰 雙子獎勵 +$${myCareer.doubleBonus}`;
+        }
 
         // Police "Jail Passage" bonus
         if (myCareer?.jailVisitBonus) {
@@ -297,10 +336,15 @@ export class Game {
 
         this.ui.setGameMessage(msg, "#00ff00");
 
-        // 4. Initial Update (Position + Balance + LastDice)
-        await this.network.pushUpdate({
+        // 4. Initial Update (Position + Balance + LastDice + JailState)
+        const playerUpdates = {
             [`rooms/${this.roomId}/players/${this.myPlayerId}/position`]: me.position,
             [`rooms/${this.roomId}/players/${this.myPlayerId}/balance`]: me.balance,
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/isJailed`]: me.isJailed,
+            [`rooms/${this.roomId}/players/${this.myPlayerId}/jailTurns`]: me.jailTurns
+        };
+        await this.network.pushUpdate({
+            ...playerUpdates,
             [`rooms/${this.roomId}/gameState/lastDice`]: [d1, d2]
         });
         await this.network.pushLog('🎲', `${me.name} ${msg}`, '#00ff88');

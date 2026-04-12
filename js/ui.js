@@ -143,7 +143,7 @@ export class UIManager {
         }
     }
 
-    updateDebugOverlay(playerOrder, players, currentTurnPlayerId, myPlayerId, isMyTurn) {
+    updateDebugOverlay(playerOrder, players, currentTurnPlayerId, myPlayerId, isMyTurn, winThreshold) {
         if (!this.debugOverlay) return;
 
         let playersHtml = "";
@@ -155,6 +155,7 @@ export class UIManager {
 
             const name = p?.name || `Player ${idx + 1}`;
             const balance = p?.balance ?? 0;
+            const assets = p?.totalAssets ?? balance;
             const color = p?.color || '#00f0ff';
 
             // Career Info
@@ -168,23 +169,32 @@ export class UIManager {
 
             playersHtml += `
             <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.5); border-left: 4px solid ${color}; border-radius: 6px; transition: transform 0.2s; ${isTurn ? `transform: scale(1.05); box-shadow: 0 0 10px ${color};` : ''}">
-                <div style="font-size: 14px; color: #ccc;">
-                    ${isTurn ? '▶' : ''} ${name} ${isMe ? '(You)' : ''}
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 14px; color: #ccc;">
+                        ${isTurn ? '▶' : ''} ${name} ${isMe ? '(You)' : ''}
+                    </div>
                 </div>
                 <div style="font-size: 28px; font-weight: bold; color: ${color}; text-shadow: 0 0 10px ${color};">
                     $${balance}
                 </div>
+                <div style="font-size: 13px; color: ${color}; filter: brightness(1.2); font-weight: bold; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
+                    <span style="opacity: 0.8;">總資產:</span> $${assets}
+                    ${winThreshold ? `<span style="font-size: 10px; opacity: 0.5;">/ $${winThreshold}</span>` : ''}
+                </div>
                 ${careerHtml}
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">Position: ${p?.position ?? 0}</div>
+                <div style="font-size: 11px; color: #888; margin-top: 6px;">Position: ${p?.position ?? 0}</div>
             </div>`;
         });
 
         this.debugOverlay.innerHTML = `
-            <div style="font-size: 14px; border-bottom: 2px solid #444; padding-bottom: 8px; margin-bottom: 10px;">
-                <span style="color: #aaa;">Status:</span> 
-                <span style="color:${isMyTurn ? '#0f0' : '#888'}; font-weight: bold;">
-                    ${isMyTurn ? 'YOUR TURN' : 'WAITING...'}
-                </span>
+            <div style="font-size: 14px; border-bottom: 2px solid #444; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="color: #aaa;">Status:</span> 
+                    <span style="color:${isMyTurn ? '#0f0' : '#888'}; font-weight: bold;">
+                        ${isMyTurn ? 'YOUR TURN' : 'WAITING...'}
+                    </span>
+                </div>
+                ${winThreshold ? `<div style="font-size: 11px; color: #ffd700; font-weight: bold; text-shadow: 0 0 5px #ffd700;">🎯 目標: $${winThreshold}</div>` : ''}
             </div>
             ${playersHtml}
         `;

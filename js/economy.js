@@ -100,4 +100,40 @@ export class Economy {
         }
         return "無";
     }
+
+    /**
+     * Calculate a player's total net worth.
+     * Assets = Cash + (Sum of Purchase Prices of owned tiles) + (Sum of building investments)
+     */
+    static calculateTotalAssets(player, properties, buildings, tileData) {
+        let assetValue = Number(player.balance) || 0;
+
+        if (!properties) return assetValue;
+
+        Object.entries(properties).forEach(([tileId, ownerId]) => {
+            if (ownerId === player.id) {
+                const tile = tileData.find(t => t.id == tileId);
+                if (tile) {
+                    // Base land price
+                    assetValue += (Number(tile.price) || 0);
+
+                    // Add building value (Lv1 = 0.5, Lv2 = 1.0, Lv3 = 1.5 of price)
+                    // Note: We use the same formula as the investment cost
+                    const b = buildings || {};
+                    const level = Number(b[tileId] || 0);
+                    if (level > 0) {
+                        // Level 1: price * 0.5
+                        // Level 2: price * (0.5 + 0.75)
+                        // Level 3: price * (0.5 + 0.75 + 1.0)
+                        // This matches what they actually PAID (un-discounted)
+                        if (level >= 1) assetValue += Math.floor(tile.price * 0.5);
+                        if (level >= 2) assetValue += Math.floor(tile.price * 0.75);
+                        if (level >= 3) assetValue += Math.floor(tile.price * 1.0);
+                    }
+                }
+            }
+        });
+
+        return assetValue;
+    }
 }
