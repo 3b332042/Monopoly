@@ -23,7 +23,7 @@ export class Game {
         };
         this.isProcessingTurn = false;
         this.gameEnded = false;
-        this.WIN_ASSET_THRESHOLD = 70000; // Target assets to win directly
+        this.WIN_ASSET_THRESHOLD = 100000; // Target assets to win directly
 
         this.ui = new UIManager();
         this.network = new NetworkManager(roomId); this.initListeners();
