@@ -292,12 +292,6 @@ export class Game {
         const oldPos = me.position;
         const steps = d1 + d2;
         const isDoubles = (d1 === d2);
-
-        // 1. Double Bonus logic (Gambler)
-        if (isDoubles && myCareer?.doubleBonus) {
-            me.balance += myCareer.doubleBonus;
-        }
-
         // 2. Move
         const passedGo = me.move(steps);
         const goBonus = passedGo ? this.awardGoBonus(this.myPlayerId, oldPos, me.position) : 0;

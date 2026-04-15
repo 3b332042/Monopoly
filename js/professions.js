@@ -34,8 +34,8 @@ export const PROFESSIONS = {
         icon: '🎰',
         color: '#ff4500',
         description: '在概率與命運中穿梭的冒險者。',
-        skills: '雙子獎勵 $3,000，保釋金 $1,000',
-        doubleBonus: 3000,
+        skills: '雙子獎勵 $1,000，保釋金 $1,000',
+        doubleBonus: 1000,
         bailCost: 1000,
     },
     POLICE: {
@@ -73,8 +73,8 @@ export const PROFESSIONS = {
         icon: '💎',
         color: '#e0ffff',
         description: '掌握城市核心命脈，資財雄厚的大亨。',
-        skills: '初始 $30,000，無起點獎金',
-        bonusInitial: 15000,
+        skills: '初始 $40,000，無起點獎金',
+        bonusInitial: 25000,
         goBonus: 0
     },
     HOOLIGAN: {
